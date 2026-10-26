@@ -9,8 +9,12 @@ __pycache__/
 node_modules/
 frontend/dist/
 
-# Backend runtime artefacts (backend/data/snapshot is committed)
-backend/data/cache/
+# Backend runtime artefacts (backend/data/snapshot is committed; backend/static is the built SPA)
 backend/static/
 
-.env
+# Local env, logs, editor and OS files
+**/.env
+*.log
+.DS_Store
+.vscode/
+.idea/

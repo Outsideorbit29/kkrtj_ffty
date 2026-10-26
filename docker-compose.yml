@@ -3,3 +3,7 @@ services:
     build: .
     ports:
       - "8000:8000"
+    environment:
+      # snapshot (bundled data, no network) or live (fetch from Elexon at startup)
+      - DATA_SOURCE=snapshot
+    restart: unless-stopped

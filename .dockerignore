@@ -8,8 +8,7 @@
 **/.ruff_cache
 frontend/dist
 backend/static
-backend/data/cache
 backend/tests
 docs
 *.md
-.env
+**/.env
