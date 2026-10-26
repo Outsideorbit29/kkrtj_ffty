@@ -27,12 +27,14 @@ export interface Meta {
 
 /**
  * Forecast fields are null for hours the decision run does not reach (cutoffs before the
- * 02:30 UTC run on D-1 leave the last hours of D uncovered); `p10`/`p90` are also null when
- * there is too little error history for a band.
+ * 02:30 UTC run on D-1 leave the last hours of D uncovered); `p10`/`p50`/`p90` are also null
+ * when there is too little error history for a band. `p50` is the bias-corrected central estimate,
+ * `max(0, forecast - q50(error))` from the same trailing window as the band.
  */
 export interface HourlyRow {
   startTime: IsoUtc;
   forecast: number | null;
+  p50: number | null;
   p10: number | null;
   p90: number | null;
   actual: number | null;
@@ -58,6 +60,8 @@ export interface DecisionSummary {
   minForecast: PowerAt;
   maxForecast: PowerAt;
   shortfallP90MWh: number | null;
+  /** Sum of hourly P50s (optional in the contract; the UI falls back to summing `hourly`). */
+  p50MWh?: number | null;
   mae: number | null;
   bias: number | null;
 }
@@ -161,6 +165,19 @@ export interface Accuracy {
   byDay: DayStat[];
   histogram: HistogramBin[];
   series: SeriesPoint[];
+  band: BandCoverage;
+}
+
+/**
+ * Backtest of the decision-time P10–P90 band: share of hours where the actual fell inside / below
+ * P10 / above P90. Hours without a band are excluded; percentages are null when `n` is 0.
+ */
+export interface BandCoverage {
+  n: number;
+  coverage_pct: number | null;
+  belowP10_pct: number | null;
+  aboveP90_pct: number | null;
+  nominal_pct: number;
 }
 
 export interface LeadTimePoint {

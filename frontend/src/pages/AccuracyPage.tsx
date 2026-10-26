@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { Accuracy, DayStat, HhMm, HistogramBin, HourOfDayStat, LeadTime, LeadTimePoint, Meta } from '../api/types';
+import type { Accuracy, BandCoverage, DayStat, HhMm, HistogramBin, HourOfDayStat, LeadTime, LeadTimePoint, Meta } from '../api/types';
 import { ChartCard } from '../components/ChartCard';
 import { DailyErrorChart } from '../components/charts/DailyErrorChart';
 import { ErrorHistogram } from '../components/charts/ErrorHistogram';
@@ -8,11 +8,13 @@ import { HourOfDayChart } from '../components/charts/HourOfDayChart';
 import { LeadTimeChart } from '../components/charts/LeadTimeChart';
 import { DataTable } from '../components/DataTable';
 import { DateRangePicker } from '../components/DateRangePicker';
+import { Info } from '../components/Icons';
 import { KpiTile, type TagTone } from '../components/KpiTile';
 import { CardSkeleton, ErrorState, KpiSkeleton, LoadingStatus, Skeleton } from '../components/States';
 import { useAccuracy, useLeadTime } from '../hooks/api';
 import type { Resource } from '../hooks/useApiResource';
 import { useUrlState } from '../hooks/useUrlState';
+import { errorSpread, leadTimeSummary } from '../lib/chartData';
 import { clampDate, formatCalendarDate, isIsoDate } from '../lib/dates';
 import { formatBin, formatEnergy, formatMw, formatPct, formatPower, hourLabel } from '../lib/format';
 
@@ -26,8 +28,17 @@ function biasTag(bias: number): { text: string; tone: TagTone } {
   return { text: 'Unbiased', tone: 'good' };
 }
 
+function bandTag(band: BandCoverage): { text: string; tone: TagTone } | undefined {
+  if (band.coverage_pct == null) return undefined;
+  const gap = band.coverage_pct - band.nominal_pct;
+  if (gap < -5) return { text: 'Too narrow', tone: 'bad' };
+  return gap > 5 ? { text: 'Conservative', tone: 'good' } : { text: 'Calibrated', tone: 'good' };
+}
+
 function AccuracyKpis({ a }: { a: Accuracy }) {
   const f = a.forecast;
+  // Guard against an older backend that does not send `band` yet.
+  const band = a.band as BandCoverage | undefined;
   return (
     <div className="kpi-grid">
       <KpiTile
@@ -65,6 +76,14 @@ function AccuracyKpis({ a }: { a: Accuracy }) {
         tag={skillTag(a.skill.vsSameHourD2_pct)}
         detail={`MAE reduction vs repeating the same hour two days earlier (${formatPower(a.baselines.sameHourD2.mae)})`}
       />
+      {band && (
+        <KpiTile
+          label="P10–P90 band coverage"
+          value={formatPct(band.coverage_pct, { digits: 0 })}
+          tag={bandTag(band)}
+          detail={`Actual inside the band in ${band.n.toLocaleString('en-GB')} hours tested (nominal ${band.nominal_pct}%) · below P10 ${formatPct(band.belowP10_pct)}, above P90 ${formatPct(band.aboveP90_pct)}`}
+        />
+      )}
     </div>
   );
 }
@@ -80,6 +99,7 @@ const leadTimeTable = (points: LeadTimePoint[]) => (
       { header: 'MAE MW', cell: (p) => formatMw(p.mae) },
       { header: 'RMSE MW', cell: (p) => formatMw(p.rmse) },
       { header: 'Bias MW', cell: (p) => formatMw(p.bias, { signed: true }) },
+      { header: 'Spread excl. bias MW', cell: (p) => formatMw(errorSpread(p)) },
     ]}
   />
 );
@@ -132,13 +152,76 @@ function decisionHorizon(a: Accuracy): { from: number; to: number } | undefined 
   return { from: Math.min(...horizons), to: Math.max(...horizons) };
 }
 
+const signed = (mw: number) => formatPower(mw, { signed: true });
+
+/** Lead-time caption built from the data: how much deciding later helps, against the bias. */
+function leadTimeCaption(a: Accuracy, leadTime: LeadTime | undefined, horizon: { from: number; to: number } | undefined): string {
+  const horizonText = horizon ? `${Math.round(horizon.from)}–${Math.round(horizon.to)} h` : 'the shaded range';
+  const summary = leadTime && leadTimeSummary(leadTime.points, horizon);
+  if (!summary?.window) {
+    return `MAE grows with lead time; the bias does not. Your ${a.cutoff} decision relies on forecasts ${horizonText} ahead.`;
+  }
+  const { first, window: win } = summary;
+  return (
+    `Your ${a.cutoff} decision relies on forecasts ${horizonText} ahead (MAE ≈ ${formatPower(win.mae)}). ` +
+    `Waiting until delivery only trims this to ≈ ${formatPower(first.mae)} at ${first.leadFrom}–${first.leadTo} h. ` +
+    `MAE grows with lead time but the bias does not: it is ≈ ${signed(win.bias)} in your window and still ${signed(first.bias)} at ${first.leadFrom}–${first.leadTo} h, ` +
+    'so correcting for bias is a bigger lever than deciding later.'
+  );
+}
+
+/** Explains a large systematic bias; shown only when |bias| exceeds 5% of mean actual wind. */
+function BiasFinding({ a, leadTime }: { a: Accuracy; leadTime: LeadTime | undefined }) {
+  const { bias, mean_actual: meanActual } = a.forecast;
+  if (!(meanActual > 0) || Math.abs(bias) <= 0.05 * meanActual) return null;
+  const high = bias > 0;
+  const first = leadTime?.points.find((p) => p.n > 0);
+
+  return (
+    <div className="callout callout--finding" role="note">
+      <Info className="callout__icon" />
+      <div>
+        <p className="callout__title">Why the forecast runs {high ? 'high' : 'low'}</p>
+        <ul className="callout__list">
+          <li>
+            The mean error is <strong>{signed(bias)}</strong> ({formatPct((Math.abs(bias) / meanActual) * 100, { digits: 0 })} of mean
+            wind)
+            {first && (
+              <>
+                , and it barely changes with lead time: still <strong>{signed(first.bias)}</strong> at {first.leadFrom}–
+                {first.leadTo} h ahead
+              </>
+            )}
+            . Deciding later does not remove it.
+          </li>
+          {high && (
+            <li>
+              It is most likely structural rather than a weather miss. WINDFOR forecasts what wind farms could produce, while FUELHH
+              WIND is metered output after transmission-constraint curtailment (bid-offer acceptances, mostly in Scotland on windy
+              days). The two streams may also cover slightly different sets of farms. The data alone cannot prove the cause.
+            </li>
+          )}
+          <li>
+            Alignment was checked: forecasts and actuals are matched on UTC start time, and the hourly actual is the mean of both
+            half-hours, so this is not a units or aggregation error.
+          </li>
+          <li>
+            What to do: plan on the expected (P50) line and the P10–P90 band on the Decision page, not the raw forecast. Both are
+            built from the last 28 days of decision-time errors, so they already remove this offset.
+          </li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 function AccuracyContent({ a, leadTime, stale }: { a: Accuracy; leadTime: Resource<LeadTime>; stale: boolean }) {
   const horizon = useMemo(() => decisionHorizon(a), [a]);
-  const horizonText = horizon ? `${Math.round(horizon.from)}–${Math.round(horizon.to)} h` : 'the shaded range';
 
   return (
     <div className={`stack${stale ? ' is-stale' : ''}`} aria-busy={stale}>
       <AccuracyKpis a={a} />
+      <BiasFinding a={a} leadTime={leadTime.data} />
       <ChartCard
         title="Forecast vs actual"
         subtitle={`Forecast available at ${a.cutoff} the day before, against outturn · GW, hourly`}
@@ -149,8 +232,8 @@ function AccuracyContent({ a, leadTime, stale }: { a: Accuracy; leadTime: Resour
       <div className="grid-2">
         <ChartCard
           title="Error by lead time"
-          subtitle="MAE of every forecast run by hours ahead · GW"
-          caption={`Error grows with lead time. Your ${a.cutoff} decision relies on forecasts ${horizonText} ahead; deciding later moves you left onto a sharper forecast.`}
+          subtitle="MAE and bias of every forecast run by hours ahead · GW"
+          caption={leadTimeCaption(a, leadTime.data, horizon)}
           table={leadTime.data && leadTimeTable(leadTime.data.points)}
         >
           {leadTime.error ? (
@@ -233,7 +316,7 @@ export function AccuracyPage({ meta, cutoff }: { meta: Meta; cutoff: HhMm }) {
         <AccuracyContent a={data} leadTime={leadTime} stale={loading} />
       ) : (
         <div className="stack">
-          <KpiSkeleton count={7} />
+          <KpiSkeleton count={8} />
           <CardSkeleton height={300} />
           <div className="grid-2">
             <CardSkeleton height={260} />

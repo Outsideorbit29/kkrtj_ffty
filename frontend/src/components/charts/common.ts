@@ -1,7 +1,6 @@
 import type { ChartTheme } from '../../lib/theme';
 
-export const HOUR_MS = 3_600_000;
-export const HALF_HOUR_MS = HOUR_MS / 2;
+export { HALF_HOUR_MS, HOUR_MS } from '../../lib/chartData';
 
 export const CHART_MARGIN = { top: 8, right: 12, bottom: 0, left: 0 };
 

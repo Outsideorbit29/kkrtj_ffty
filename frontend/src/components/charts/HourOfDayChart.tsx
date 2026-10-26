@@ -27,7 +27,7 @@ export function HourOfDayChart({ hours }: { hours: HourOfDayStat[] }) {
                 <TooltipFrame
                   title={`${hourLabel(row.hour)}–${hourLabel((row.hour + 1) % 24)}`}
                   rows={[
-                    { name: 'MAE', value: formatPower(row.mae), color: theme.forecast },
+                    { name: 'MAE', value: formatPower(row.mae), color: theme.error },
                     { name: 'Bias', value: formatPower(row.bias, { signed: true }) },
                   ]}
                   note={`${row.n} hours`}
@@ -35,7 +35,7 @@ export function HourOfDayChart({ hours }: { hours: HourOfDayStat[] }) {
               );
             }}
           />
-          <Bar dataKey="mae" fill={theme.forecast} maxBarSize={24} shape={<RoundedBar />} isAnimationActive={false} />
+          <Bar dataKey="mae" fill={theme.error} maxBarSize={24} shape={<RoundedBar />} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -2,6 +2,8 @@
 export interface ChartTheme {
   forecast: string;
   actual: string;
+  /** Error magnitude (MAE): neutral, so blue only means forecast and blue/red only signed error. */
+  error: string;
   over: string;
   under: string;
   muted: string;
@@ -15,6 +17,7 @@ export interface ChartTheme {
 const VARS: Record<keyof ChartTheme, string> = {
   forecast: '--series-forecast',
   actual: '--series-actual',
+  error: '--series-error',
   over: '--diverge-over',
   under: '--diverge-under',
   muted: '--series-muted',

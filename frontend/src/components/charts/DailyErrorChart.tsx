@@ -17,7 +17,7 @@ function DayTooltip({ row, theme }: { row: DayStat | undefined; theme: ChartThem
     <TooltipFrame
       title={`Delivery ${formatCalendarDate(row.date)}`}
       rows={[
-        { name: 'MAE', value: formatPower(row.mae), color: theme.forecast },
+        { name: 'MAE', value: formatPower(row.mae), color: theme.error },
         { name: 'Bias', value: formatPower(row.bias, { signed: true }), color: signColor(theme, row.bias) },
         { name: 'Forecast energy', value: formatEnergy(row.forecastMWh) },
         { name: 'Actual energy', value: formatEnergy(row.actualMWh) },
@@ -48,7 +48,7 @@ export function DailyErrorChart({ days }: { days: DayStat[] }) {
             <XAxis dataKey="date" hide />
             <YAxis tickFormatter={gwTick} {...niceScale(days.map((d) => d.mae), 4)} {...yAxisStyle(theme)} />
             {tooltip}
-            <Bar dataKey="mae" fill={theme.forecast} maxBarSize={24} shape={<RoundedBar />} isAnimationActive={false} />
+            <Bar dataKey="mae" fill={theme.error} maxBarSize={24} shape={<RoundedBar />} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>

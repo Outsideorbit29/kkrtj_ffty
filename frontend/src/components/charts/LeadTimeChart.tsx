@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { CartesianGrid, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { LeadTimePoint } from '../../api/types';
 import { useChartTheme } from '../../hooks/useChartTheme';
+import { errorSpread } from '../../lib/chartData';
 import { formatPower, gwTick } from '../../lib/format';
 import { Legend } from '../Legend';
 import { TooltipFrame } from '../TooltipFrame';
@@ -24,13 +25,19 @@ export function LeadTimeChart({ points, decisionHorizon }: LeadTimeChartProps) {
   const byMid = useMemo(() => new Map(data.map((p) => [p.mid, p])), [data]);
   if (data.length === 0) return <p className="empty">No lead-time data in this range.</p>;
   const maxLead = Math.max(...data.map((p) => p.leadTo));
-  const yScale = niceScale(data.map((p) => p.mae));
+  const yScale = niceScale(data.flatMap((p) => [p.mae, p.bias]));
 
   return (
     <>
-      {decisionHorizon && (
-        <Legend items={[{ label: 'Lead times covered by your day-ahead decision', color: theme.forecast, kind: 'band' }]} />
-      )}
+      <Legend
+        items={[
+          { label: 'MAE', color: theme.error, kind: 'line' },
+          { label: 'Bias (forecast − actual)', color: theme.over, kind: 'dashed' },
+          ...(decisionHorizon
+            ? [{ label: 'Lead times covered by your day-ahead decision', color: theme.error, kind: 'band' as const }]
+            : []),
+        ]}
+      />
       <div className="chart" style={{ height: 260 }}>
         <ResponsiveContainer>
           <LineChart data={data} margin={CHART_MARGIN} accessibilityLayer>
@@ -39,7 +46,7 @@ export function LeadTimeChart({ points, decisionHorizon }: LeadTimeChartProps) {
               <ReferenceArea
                 x1={decisionHorizon.from}
                 x2={decisionHorizon.to}
-                fill={theme.forecast}
+                fill={theme.error}
                 fillOpacity={0.1}
                 stroke="none"
                 ifOverflow="extendDomain"
@@ -54,6 +61,7 @@ export function LeadTimeChart({ points, decisionHorizon }: LeadTimeChartProps) {
               {...axisStyle(theme)}
             />
             <YAxis tickFormatter={gwTick} {...yScale} {...yAxisStyle(theme)} />
+            <ReferenceLine y={0} stroke={theme.axis} />
             <Tooltip
               cursor={{ stroke: theme.axis, strokeWidth: 1 }}
               isAnimationActive={false}
@@ -65,9 +73,10 @@ export function LeadTimeChart({ points, decisionHorizon }: LeadTimeChartProps) {
                   <TooltipFrame
                     title={`Lead time ${p.leadFrom}–${p.leadTo} h`}
                     rows={[
-                      { name: 'MAE', value: formatPower(p.mae), color: theme.forecast },
+                      { name: 'MAE', value: formatPower(p.mae), color: theme.error },
+                      { name: 'Bias', value: formatPower(p.bias, { signed: true }), color: theme.over, dashed: true },
+                      { name: 'Spread excl. bias (std)', value: formatPower(errorSpread(p)) },
                       { name: 'RMSE', value: formatPower(p.rmse) },
-                      { name: 'Bias', value: formatPower(p.bias, { signed: true }) },
                     ]}
                     note={`${p.n.toLocaleString('en-GB')} forecast hours`}
                   />
@@ -76,10 +85,19 @@ export function LeadTimeChart({ points, decisionHorizon }: LeadTimeChartProps) {
             />
             <Line
               dataKey="mae"
-              stroke={theme.forecast}
+              stroke={theme.error}
               strokeWidth={2}
-              dot={{ r: 4, fill: theme.forecast, stroke: theme.surface, strokeWidth: 2 }}
-              activeDot={{ r: 5, fill: theme.forecast, stroke: theme.surface, strokeWidth: 2 }}
+              dot={{ r: 4, fill: theme.error, stroke: theme.surface, strokeWidth: 2 }}
+              activeDot={{ r: 5, fill: theme.error, stroke: theme.surface, strokeWidth: 2 }}
+              isAnimationActive={false}
+            />
+            <Line
+              dataKey="bias"
+              stroke={theme.over}
+              strokeWidth={2}
+              strokeDasharray="4 3"
+              dot={false}
+              activeDot={{ r: 4, fill: theme.over, stroke: theme.surface, strokeWidth: 2 }}
               isAnimationActive={false}
             />
           </LineChart>

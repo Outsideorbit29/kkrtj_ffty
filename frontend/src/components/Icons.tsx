@@ -38,6 +38,13 @@ export const Clock = (props: IconProps) => (
   </svg>
 );
 
+export const Info = (props: IconProps) => (
+  <svg {...base} {...props}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5M12 8h.01" />
+  </svg>
+);
+
 export const WindMark = (props: IconProps) => (
   <svg viewBox="0 0 34 34" aria-hidden focusable={false} {...props}>
     <rect width="34" height="34" rx="8" fill="var(--accent)" />

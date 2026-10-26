@@ -2,28 +2,12 @@ import { useMemo } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ForecastRun, HourlyRow } from '../../api/types';
 import { useChartTheme } from '../../hooks/useChartTheme';
+import { buildRunsPoints, runKey, type RunsPoint as Point } from '../../lib/chartData';
 import { formatDayTime, formatPower, formatTime, gwTick, toMs } from '../../lib/format';
 import type { ChartTheme } from '../../lib/theme';
 import { Legend } from '../Legend';
 import { TooltipFrame, type TooltipRow } from '../TooltipFrame';
 import { CHART_MARGIN, HOUR_MS, axisStyle, labelToNumber, timeTicks, yAxisStyle, niceScale } from './common';
-
-type Point = { t: number; actual?: number | null } & Record<string, number | null | undefined>;
-
-const runKey = (i: number) => `run${i}`;
-
-function buildPoints(runs: ForecastRun[], hourly: HourlyRow[]): Point[] {
-  const byTime = new Map<number, Point>();
-  hourly.forEach((row) => byTime.set(toMs(row.startTime), { t: toMs(row.startTime), actual: row.actual }));
-  // Runs can extend beyond D; keep only the delivery day's hours.
-  runs.forEach((run, i) =>
-    run.points.forEach((pt) => {
-      const point = byTime.get(toMs(pt.startTime));
-      if (point) point[runKey(i)] = pt.forecast;
-    }),
-  );
-  return [...byTime.values()];
-}
 
 function lineStyle(run: ForecastRun, theme: ChartTheme) {
   if (run.isDecisionRun) return { stroke: theme.forecast, strokeWidth: 2.5 };
@@ -64,8 +48,8 @@ interface RunsChartProps {
 
 export function RunsChart({ runs, hourly }: RunsChartProps) {
   const theme = useChartTheme();
-  const points = useMemo(() => buildPoints(runs, hourly), [runs, hourly]);
-  const pointByTime = useMemo(() => new Map(points.map((p) => [p.t, p])), [points]);
+  // `points` adds a closing point at midnight; `pointByTime` holds only real hour starts.
+  const { points, byHour: pointByTime } = useMemo(() => buildRunsPoints(runs, hourly), [runs, hourly]);
   // Draw the decision run last so it sits on top.
   const drawOrder = useMemo(
     () => runs.map((run, i) => ({ run, i })).sort((a, b) => Number(a.run.isDecisionRun) - Number(b.run.isDecisionRun)),
@@ -75,7 +59,7 @@ export function RunsChart({ runs, hourly }: RunsChartProps) {
   const first = hourly[0];
   if (!first || runs.length === 0) return <p className="empty">No forecast runs cover this day.</p>;
   const from = toMs(first.startTime);
-  const to = from + (hourly.length - 1) * HOUR_MS;
+  const to = from + hourly.length * HOUR_MS;
   const decisionRun = runs.find((r) => r.isDecisionRun);
   const hasLater = runs.some((r) => !r.availableAtDecision);
   const hasEarlier = runs.some((r) => r.availableAtDecision && !r.isDecisionRun);
@@ -117,7 +101,10 @@ export function RunsChart({ runs, hourly }: RunsChartProps) {
               isAnimationActive={false}
               content={({ label }) => {
                 const t = labelToNumber(label);
-                return <RunsTooltip point={t === undefined ? undefined : pointByTime.get(t)} runs={runs} theme={theme} />;
+                // Values are hourly averages over [H, H+1): snap to the hour start; the midnight closing point has no tooltip.
+                const hourStart = t === undefined ? undefined : Math.floor(t / HOUR_MS) * HOUR_MS;
+                const point = hourStart === undefined || hourStart >= to ? undefined : pointByTime.get(hourStart);
+                return <RunsTooltip point={point} runs={runs} theme={theme} />;
               }}
             />
             {drawOrder.map(({ run, i }) => (
@@ -125,7 +112,8 @@ export function RunsChart({ runs, hourly }: RunsChartProps) {
                 key={run.publishTimeUtc}
                 dataKey={runKey(i)}
                 name={formatDayTime(run.publishTimeUtc)}
-                type="linear"
+                type="stepAfter"
+                connectNulls
                 dot={false}
                 activeDot={false}
                 isAnimationActive={false}
@@ -134,7 +122,8 @@ export function RunsChart({ runs, hourly }: RunsChartProps) {
             ))}
             <Line
               dataKey="actual"
-              type="linear"
+              type="stepAfter"
+              connectNulls
               stroke={theme.actual}
               strokeWidth={2}
               dot={false}

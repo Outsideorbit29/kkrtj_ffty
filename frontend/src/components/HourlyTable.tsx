@@ -10,6 +10,7 @@ const hourRange = (row: HourlyRow) => `${formatTime(row.startTime)}–${formatTi
 const COLUMNS: Column<HourlyRow>[] = [
   { header: 'Hour (UK)', cell: hourRange },
   { header: 'Forecast MW', cell: (r) => formatMw(r.forecast) },
+  { header: 'P50 MW', cell: (r) => formatMw(r.p50) },
   { header: 'P10 MW', cell: (r) => formatMw(r.p10) },
   { header: 'P90 MW', cell: (r) => formatMw(r.p90) },
   { header: 'Actual MW', cell: (r) => formatMw(r.actual) },
@@ -19,8 +20,8 @@ const COLUMNS: Column<HourlyRow>[] = [
 
 function exportCsv(decision: Decision) {
   const csv = toCsv(
-    ['start_time_utc', 'hour_uk', 'forecast_mw', 'p10_mw', 'p90_mw', 'actual_mw', 'error_mw', 'horizon_hours'],
-    decision.hourly.map((r) => [r.startTime, hourRange(r), r.forecast, r.p10, r.p90, r.actual, r.error, r.horizonHours]),
+    ['start_time_utc', 'hour_uk', 'forecast_mw', 'p50_mw', 'p10_mw', 'p90_mw', 'actual_mw', 'error_mw', 'horizon_hours'],
+    decision.hourly.map((r) => [r.startTime, hourRange(r), r.forecast, r.p50, r.p10, r.p90, r.actual, r.error, r.horizonHours]),
   );
   const cutoff = decision.cutoff.replace(':', '');
   downloadText(`wind-forecast_delivery-${decision.deliveryDate}_cutoff-${cutoff}.csv`, csv);

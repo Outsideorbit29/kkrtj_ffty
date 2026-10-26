@@ -2,48 +2,12 @@ import { useMemo } from 'react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { HalfHourlyActual, HourlyRow } from '../../api/types';
 import { useChartTheme } from '../../hooks/useChartTheme';
+import { buildDecisionPoints } from '../../lib/chartData';
 import { formatPower, formatTime, gwTick, toMs } from '../../lib/format';
 import type { ChartTheme } from '../../lib/theme';
 import { Legend } from '../Legend';
 import { TooltipFrame, type TooltipRow } from '../TooltipFrame';
 import { CHART_MARGIN, HALF_HOUR_MS, HOUR_MS, axisStyle, labelToNumber, timeTicks, yAxisStyle, niceScale } from './common';
-
-interface Point {
-  t: number;
-  forecast?: number;
-  band?: [number, number];
-  actual?: number | null;
-  halfHourly?: number;
-}
-
-/**
- * Hourly values are averages over [H, H+1), so they are drawn as steps. Each step series gets a
- * closing point at the end of its last period so the final hour/half-hour is visible.
- */
-function buildPoints(hourly: HourlyRow[], halfHourly: HalfHourlyActual[]): Point[] {
-  const byTime = new Map<number, Point>();
-  const at = (t: number): Point => {
-    let p = byTime.get(t);
-    if (!p) byTime.set(t, (p = { t }));
-    return p;
-  };
-  const putHour = (t: number, row: HourlyRow) =>
-    Object.assign(at(t), {
-      forecast: row.forecast ?? undefined,
-      band: row.p10 !== null && row.p90 !== null ? [row.p10, row.p90] : undefined,
-      actual: row.actual,
-    });
-
-  hourly.forEach((row) => putHour(toMs(row.startTime), row));
-  const lastHour = hourly.at(-1);
-  if (lastHour) putHour(toMs(lastHour.startTime) + HOUR_MS, lastHour);
-
-  halfHourly.forEach((row) => (at(toMs(row.startTime)).halfHourly = row.generation));
-  const lastHalf = halfHourly.at(-1);
-  if (lastHalf) at(toMs(lastHalf.startTime) + HALF_HOUR_MS).halfHourly = lastHalf.generation;
-
-  return [...byTime.values()].sort((a, b) => a.t - b.t);
-}
 
 function DecisionTooltip(props: {
   t: number | undefined;
@@ -60,7 +24,8 @@ function DecisionTooltip(props: {
   const first = halfHourly.get(hourStart);
   const second = halfHourly.get(hourStart + HALF_HOUR_MS);
   const rows: TooltipRow[] = [
-    { name: 'Forecast', value: formatPower(row.forecast), color: theme.forecast },
+    ...(row.p50 != null ? [{ name: 'Expected (P50)', value: formatPower(row.p50), color: theme.forecast }] : []),
+    { name: 'Published forecast', value: formatPower(row.forecast), color: theme.forecast, dashed: row.p50 != null },
     { name: 'Likely range (P10–P90)', value: `${formatPower(row.p10)} – ${formatPower(row.p90)}` },
     { name: 'Actual (hourly)', value: formatPower(row.actual), color: theme.actual },
     { name: 'Error (fcst − actual)', value: formatPower(row.error, { signed: true }) },
@@ -89,7 +54,7 @@ interface DecisionChartProps {
 
 export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) {
   const theme = useChartTheme();
-  const points = useMemo(() => buildPoints(hourly, actualHalfHourly), [hourly, actualHalfHourly]);
+  const points = useMemo(() => buildDecisionPoints(hourly, actualHalfHourly), [hourly, actualHalfHourly]);
   const hourlyByTime = useMemo(() => new Map(hourly.map((r) => [toMs(r.startTime), r])), [hourly]);
   const halfByTime = useMemo(
     () => new Map(actualHalfHourly.map((r) => [toMs(r.startTime), r.generation])),
@@ -101,8 +66,9 @@ export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) 
   const from = toMs(first.startTime);
   const to = from + hourly.length * HOUR_MS;
   const hasActual = hourly.some((r) => r.actual !== null);
+  const hasP50 = hourly.some((r) => r.p50 != null);
   const yScale = niceScale([
-    ...hourly.flatMap((r) => [r.p90 ?? 0, r.forecast ?? 0, r.actual ?? 0]),
+    ...hourly.flatMap((r) => [r.p90 ?? 0, r.p50 ?? 0, r.forecast ?? 0, r.actual ?? 0]),
     ...actualHalfHourly.map((r) => r.generation),
   ]);
 
@@ -110,7 +76,8 @@ export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) 
     <>
       <Legend
         items={[
-          { label: 'Forecast used at decision', color: theme.forecast, kind: 'line' },
+          ...(hasP50 ? [{ label: 'Expected (bias-corrected P50)', color: theme.forecast, kind: 'line' as const }] : []),
+          { label: 'Elexon forecast as published', color: theme.forecast, kind: hasP50 ? 'dashed' : 'line' },
           { label: '80% likely range (P10–P90)', color: theme.forecast, kind: 'band' },
           ...(hasActual
             ? [
@@ -163,6 +130,17 @@ export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) 
               isAnimationActive={false}
             />
             <Line
+              dataKey="forecast"
+              type="stepAfter"
+              stroke={theme.forecast}
+              strokeWidth={hasP50 ? 1.5 : 2}
+              strokeDasharray={hasP50 ? '5 3' : undefined}
+              dot={false}
+              activeDot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+            <Line
               dataKey="actual"
               type="stepAfter"
               stroke={theme.actual}
@@ -172,16 +150,18 @@ export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) 
               connectNulls
               isAnimationActive={false}
             />
-            <Line
-              dataKey="forecast"
-              type="stepAfter"
-              stroke={theme.forecast}
-              strokeWidth={2}
-              dot={false}
-              activeDot={false}
-              connectNulls
-              isAnimationActive={false}
-            />
+            {hasP50 && (
+              <Line
+                dataKey="p50"
+                type="stepAfter"
+                stroke={theme.forecast}
+                strokeWidth={2.5}
+                dot={false}
+                activeDot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
