@@ -7,6 +7,7 @@
   "functions": {
     "api/index.py": {
       "includeFiles": "backend/{app,data/snapshot}/**",
+      "excludeFiles": "{frontend,docs,.github,backend/tests,backend/.venv,**/.pytest_cache,**/.ruff_cache,**/__pycache__,**/node_modules}/**",
       "maxDuration": 30
     }
   },

@@ -1,2 +1,6 @@
-# Used by Vercel's Python runtime for api/index.py; the backend pins live in one place.
--r backend/requirements.txt
+# Runtime deps for Vercel's Python function (api/index.py). Must match backend/requirements.txt;
+# backend/tests/test_vercel.py enforces that. No uvicorn: Vercel serves the ASGI app itself.
+fastapi==0.162.*
+httpx==0.28.*
+pandas==2.3.*
+numpy==2.3.*
