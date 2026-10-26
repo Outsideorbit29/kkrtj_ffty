@@ -37,10 +37,12 @@ def mount_spa(app: FastAPI, static_dir: Path) -> bool:
     def spa(path: str) -> FileResponse:
         if path == "api" or path.startswith("api/"):
             raise HTTPException(404, "Not found")
-        candidate = (root / path).resolve()
-        # Top-level files such as favicon.ico; anything else is a client-side route.
-        if path and candidate.is_file() and candidate.is_relative_to(root):
-            return FileResponse(candidate)
+        # Top-level files such as favicon.ico; anything else is a client-side route. A NUL byte
+        # makes resolve() raise on POSIX, so such paths fall through to index.html.
+        if path and "\x00" not in path:
+            candidate = (root / path).resolve()
+            if candidate.is_file() and candidate.is_relative_to(root):
+                return FileResponse(candidate)
         # Revalidate on every load (ETag keeps it cheap) so a redeploy never leaves a stale index
         # pointing at hashed /assets that no longer exist.
         return FileResponse(index, headers={"Cache-Control": "no-cache"})
