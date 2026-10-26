@@ -14,7 +14,8 @@ backend API described in [`docs/API.md`](../docs/API.md); there is no mock data 
 - **Forecast accuracy** – for a delivery-date range at the chosen cutoff: MAE, RMSE, bias, P90
   absolute error, nMAE, skill against persistence and same-hour-D-2 baselines, and a backtest of
   the P10–P90 band coverage. When the bias is large, a callout explains its likely cause. Charts
-  cover lead time (MAE and bias), hour of day, day, and the error distribution. Each chart says what
+  cover forecast vs actual, lead time (MAE and bias), bias by forecast level, day, hour of day and the
+  error distribution, plus a bias-corrected (P50) MAE tile. Each chart says what
   it means for buying.
 
 The cutoff selector in the header applies to both views. View, cutoff and dates are kept in the URL
@@ -27,7 +28,7 @@ npm ci
 npm run dev        # http://localhost:5173, proxies /api to http://localhost:8000
 npm run build      # type-check (tsc -b) + production build into dist/
 npm run lint
-npm test           # unit tests for chart/KPI data shaping and CSV (Node's built-in runner, Node >= 22.6)
+npm test           # unit tests for chart/KPI data shaping and CSV (Node's built-in runner with type stripping, Node >= 22.18)
 ```
 
 `VITE_API_BASE` (build time) sets the API origin. Leave it unset when the backend serves the
