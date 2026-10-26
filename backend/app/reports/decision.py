@@ -14,7 +14,7 @@ from app.reports import NoDataError
 from app.reports.tables import decision_table
 from app.serialize import day, iso, num, records
 
-HOURLY_COLUMNS = ["startTime", "forecast", "p10", "p90", "actual", "error", "horizonHours"]
+HOURLY_COLUMNS = ["startTime", "forecast", "p50", "p10", "p90", "actual", "error", "horizonHours"]
 
 
 def decision_report(ds: Dataset, delivery_day: date, cutoff: time) -> dict[str, Any]:
@@ -26,7 +26,7 @@ def decision_report(ds: Dataset, delivery_day: date, cutoff: time) -> dict[str, 
     rows = table[table["deliveryDay"] == pd.Timestamp(delivery_day)]
     decision_time = rows["decisionTime"].iloc[0]
     if rows["forecast"].isna().all():
-        raise NoDataError(f"No WINDFOR run published at or before {iso(decision_time)}")
+        raise NoDataError(f"No WINDFOR run published before {iso(decision_time)}")
 
     publish_time = rows["publishTime"].max()
     day_start, day_end = rows["startTime"].min(), rows["startTime"].max() + HOUR
@@ -66,6 +66,7 @@ def _summary(rows: pd.DataFrame) -> dict[str, Any]:
     errors = rows["error"].dropna()
     return {
         "forecastMWh": num(rows["forecast"].sum(min_count=1)),
+        "p50MWh": num(rows["p50"].sum(min_count=1)),
         "actualMWh": num(rows["actual"].sum()) if complete else None,
         "errorMWh": num(errors.sum()) if complete else None,
         "minForecast": _forecast_at(rows, rows["forecast"].idxmin()),
@@ -73,6 +74,9 @@ def _summary(rows: pd.DataFrame) -> dict[str, Any]:
         "shortfallP90MWh": num((rows["forecast"] - rows["p10"]).sum(min_count=1)),
         "mae": num(errors.abs().mean()),
         "bias": num(errors.mean()),
+        # Median decision-time error over the trailing band window: how far the raw forecast has run
+        # high (positive) or low, as subtracted to get p50. Null when the band is unavailable.
+        "trailingMedianError": num(rows["errorQMid"].iloc[0]),
     }
 
 
@@ -96,7 +100,7 @@ def _runs(
     return [
         {
             "publishTimeUtc": iso(publish_time),
-            "availableAtDecision": bool(publish_time <= decision_time),
+            "availableAtDecision": bool(publish_time < decision_time),
             "isDecisionRun": bool(publish_time == decision_publish),
             "points": records(points[["startTime", "generation"]].rename(columns={"generation": "forecast"})),
         }

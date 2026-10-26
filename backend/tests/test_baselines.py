@@ -16,9 +16,11 @@ def _persistence(decision: str) -> float:
     return add_persistence(table, HALF_HOURLY)["persistence"].iloc[0]
 
 
-def test_persistence_uses_last_period_ended_by_decision_time():
+def test_persistence_uses_last_period_ended_before_decision_time():
     assert _persistence("2026-01-14T09:20Z") == 111.0  # the 09:00 period only ends at 09:30
-    assert _persistence("2026-01-14T09:30Z") == 222.0  # period end == decision time is known
+    # period ending exactly at decision time is not yet known
+    assert _persistence("2026-01-14T09:30Z") == 111.0
+    assert _persistence("2026-01-14T09:31Z") == 222.0
 
 
 def test_same_hour_d2_is_hourly_actual_48h_earlier():

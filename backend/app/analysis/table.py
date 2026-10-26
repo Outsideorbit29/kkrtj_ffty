@@ -25,7 +25,7 @@ def build_decision_table(
     band_min_samples: int,
 ) -> pd.DataFrame:
     """Columns: startTime, deliveryDay, decisionTime, publishTime, forecast, horizonHours,
-    actual, error, persistence, sameHourD2, errorQLow, errorQHigh, bandN, p10, p90."""
+    actual, error, persistence, sameHourD2, errorQLow, errorQMid, errorQHigh, bandN, p10, p50, p90."""
     hours = delivery_hours(first_day, last_day)
     days = hours["deliveryDay"].drop_duplicates()
     decisions = pd.DataFrame({"deliveryDay": days, "decisionTime": decision_times(days, cutoff, lead_days)})

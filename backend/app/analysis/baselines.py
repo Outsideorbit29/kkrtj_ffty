@@ -9,7 +9,10 @@ TWO_DAYS = pd.Timedelta(days=2)
 
 
 def add_persistence(table: pd.DataFrame, half_hourly: pd.DataFrame) -> pd.DataFrame:
-    """``persistence``: last half-hourly actual whose period ended at or before ``decisionTime``."""
+    """``persistence``: last half-hourly actual whose period ended strictly before ``decisionTime``.
+
+    A period is published at its end, so one ending exactly at the cutoff is not yet known.
+    """
     known = pd.DataFrame(
         {"periodEnd": half_hourly["startTime"] + HALF_HOUR, "persistence": half_hourly["generation"]}
     ).dropna()
@@ -19,7 +22,7 @@ def add_persistence(table: pd.DataFrame, half_hourly: pd.DataFrame) -> pd.DataFr
         left_on="decisionTime",
         right_on="periodEnd",
         direction="backward",
-        allow_exact_matches=True,
+        allow_exact_matches=False,
     )
     return merged.drop(columns="periodEnd").sort_values("startTime", ignore_index=True)
 

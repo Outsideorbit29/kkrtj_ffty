@@ -25,12 +25,16 @@ CUTOFF_PRESETS = (
     {"label": "Pre-Brexit coupled auction", "value": "11:00"},
     {"label": "EPEX half-hourly auction", "value": "15:30"},
 )
+# Nominal Elexon WINDFOR publication schedule (UTC), reported by /api/meta. The snapshot also holds
+# two delayed runs that stand in for that day's 11:30 run: 2025-11-27 12:48 and 2026-01-15 12:25 UTC
+# (57 points each). Selection always uses the real publishTime, never this list.
 FORECAST_RUN_TIMES_UTC = ("02:30", "04:30", "07:30", "09:30", "11:30", "15:30", "18:30", "22:30")
 
 BAND_WINDOW_DAYS = 28
 BAND_MIN_SAMPLES = 7 * 24  # below a week of history the quantiles are too noisy to show
 HISTOGRAM_BIN_MW = 500
 HORIZON_BUCKET_HOURS = 6
+FORECAST_LEVEL_BUCKET_MW = 4000
 LEAD_BUCKET_HOURS = 3
 LEAD_MAX_HOURS = 72
 

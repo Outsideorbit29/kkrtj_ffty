@@ -38,15 +38,28 @@ def accuracy_report(ds: Dataset, start: date, end: date, cutoff: time) -> dict[s
         baselines[key] = metrics(baseline)
         skill[skill_key] = num(skill_pct(_or_none(forecast_mae), baseline["mae"]))
 
+    # Bias-adjusted P50 (forecast - trailing median error). Not a naive baseline, so it is reported
+    # on its own; its skill scores compare MAEs over the same hours (those where p50 exists).
+    adjusted = error_metrics(comparable["p50"], comparable["actual"])
+    has_p50 = comparable["p50"].notna()
+    raw_mae = comparable.loc[has_p50, "error"].abs().mean()
+    skill["adjustedVsForecast_pct"] = num(skill_pct(adjusted["mae"], _or_none(raw_mae)))
+    both = has_p50 & comparable["persistence"].notna()
+    adjusted_mae = (comparable.loc[both, "p50"] - comparable.loc[both, "actual"]).abs().mean()
+    persistence_mae = (comparable.loc[both, "persistence"] - comparable.loc[both, "actual"]).abs().mean()
+    skill["adjustedVsPersistence_pct"] = num(skill_pct(_or_none(adjusted_mae), _or_none(persistence_mae)))
+
     series_columns = ["startTime", "forecast", "actual", "error", "horizonHours"]
     return {
         "start": start.isoformat(),
         "end": end.isoformat(),
         "cutoff": cutoff.strftime("%H:%M"),
         "forecast": metrics(error_metrics(comparable["forecast"], comparable["actual"])),
+        "forecastAdjusted": metrics(adjusted),
         "baselines": baselines,
         "skill": skill,
         "byHorizon": _by_horizon(comparable),
+        "byForecastLevel": _by_forecast_level(comparable),
         "byHourOfDay": _by_hour_of_day(comparable),
         "byDay": _by_day(comparable),
         "histogram": records(histogram(comparable["error"], config.HISTOGRAM_BIN_MW)),
@@ -77,6 +90,20 @@ def _by_horizon(comparable: pd.DataFrame) -> list[dict[str, Any]]:
     stats["horizonTo"] = stats["horizonFrom"] + width
     stats["bucket"] = stats["horizonFrom"].astype(str) + "-" + stats["horizonTo"].astype(str) + "h"
     return records(stats[["bucket", "horizonFrom", "horizonTo", "n", "mae", "rmse", "bias"]])
+
+
+def _by_forecast_level(comparable: pd.DataFrame) -> list[dict[str, Any]]:
+    """Error by decision-time forecast level (never the actual, which is unknown when buying)."""
+    width = config.FORECAST_LEVEL_BUCKET_MW
+    key = bucket_start(comparable["forecast"], width).rename("from")
+    stats = grouped_metrics(comparable, key)
+    stats["overForecastShare"] = (comparable["error"] > 0).groupby(key).mean()
+    stats = stats.reset_index().astype({"from": int})
+    stats["to"] = stats["from"] + width
+    gw = 1000
+    stats["bucket"] = (stats["from"] // gw).astype(str) + "-" + (stats["to"] // gw).astype(str) + " GW"
+    columns = ["bucket", "from", "to", "n", "mae", "bias", "overForecastShare"]
+    return records(stats[columns], {"overForecastShare": 3})
 
 
 def _by_hour_of_day(comparable: pd.DataFrame) -> list[dict[str, Any]]:
