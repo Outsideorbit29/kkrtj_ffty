@@ -32,6 +32,7 @@ FORECAST_RUN_TIMES_UTC = ("02:30", "04:30", "07:30", "09:30", "11:30", "15:30", 
 
 BAND_WINDOW_DAYS = 28
 BAND_MIN_SAMPLES = 7 * 24  # below a week of history the quantiles are too noisy to show
+BAND_NOMINAL_PCT = 80  # P10-P90 is an 80% interval for the actual
 HISTOGRAM_BIN_MW = 500
 HORIZON_BUCKET_HOURS = 6
 FORECAST_LEVEL_BUCKET_MW = 4000

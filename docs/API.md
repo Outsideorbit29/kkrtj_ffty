@@ -30,7 +30,7 @@ Dates (`date`, `start`, `end`) are Europe/London calendar dates `YYYY-MM-DD` and
   "defaultCutoff": "09:20",
   "cutoffPresets": [{"label": "N2EX / EPEX hourly auction", "value": "09:20"}, {"label": "Pre-Brexit coupled auction", "value": "11:00"}, {"label": "EPEX half-hourly auction", "value": "15:30"}],
   "forecastRunTimesUtc": ["02:30", "04:30", "07:30", "09:30", "11:30", "15:30", "18:30", "22:30"],
-  "dataSource": "snapshot", "snapshotCreatedUtc": "2026-10-26T10:00:00Z",
+  "dataSource": "snapshot", "snapshotCreatedUtc": "2026-10-26T17:10:39Z",
   "timezone": "Europe/London"
 }
 ```
@@ -65,8 +65,9 @@ Values below are the real response for this request (first row of each list show
 }
 ```
 - `hourly`: 24 rows for D (23/25 on clock-change days; not relevant in January). `actual`, `error` are `null` when unknown.
-  Hours the decision run does not cover (cutoffs before 02:30 London use the D-2 22:30 UTC run, which ends at
-  D 21:00 UTC, so 23:00 and later are uncovered) have `forecast`, `p50`, `p10`, `p90`, `error`, `horizonHours` = `null`.
+  Hours the decision run does not cover (cutoffs before 02:30 London use the D-2 22:30 UTC run, whose last
+  hourly point is D 21:00 UTC, so the 22:00 and 23:00 hours are uncovered) have `forecast`, `p50`, `p10`,
+  `p90`, `error`, `horizonHours` = `null`; `actual` is still filled where known.
 - `bandMethod` names the window and its sample count `n` = past hourly errors in the trailing window that were
   known strictly before D's decision time (657 at 09:20: 27 full days + the 9 hours of D-1 that ended by 09:00;
   594 at 01:00). When `n < 168` it reads `"Unavailable: fewer than 168 past errors ... (n=...)"` and
@@ -100,6 +101,7 @@ response for the default request (first row of each list shown).
   "forecastAdjusted": {"n": 744, "mae": 1445.8, "rmse": 1909.0, "bias": 649.3, "nmae_pct": 12.8, "...": "same keys as forecast"},
   "baselines": {"persistence": {"n": 744, "mae": 4110.6, "...": "same keys"}, "sameHourD2": {"n": 744, "mae": 4340.3, "...": "same keys"}},
   "skill": {"vsPersistence_pct": 50.4, "vsSameHourD2_pct": 53.0, "adjustedVsForecast_pct": 29.1, "adjustedVsPersistence_pct": 64.8},
+  "band": {"n": 744, "coverage_pct": 85.2, "belowP10_pct": 10.6, "aboveP90_pct": 4.2, "nominal_pct": 80},
   "byHorizon": [{"bucket": "12-18h", "horizonFrom": 12, "horizonTo": 18, "n": 62, "mae": 2098.4, "rmse": 2599.8, "bias": 2043.0}],
   "byForecastLevel": [{"bucket": "8-12 GW", "from": 8000, "to": 12000, "n": 201, "mae": 1754.8, "bias": 1467.7, "overForecastShare": 0.851}],
   "byHourOfDay": [{"hour": 0, "n": 31, "mae": 2027.8, "bias": 1952.7}],
@@ -118,7 +120,7 @@ response for the default request (first row of each list shown).
 - Bucket rules (all buckets are `[from, to)`, left edge = `floor(value / width) * width`, and only non-empty
   buckets are listed, in ascending order):
   - `byHorizon`: 6 h buckets of the decision-run horizon (`"12-18h"`). At a fixed cutoff every day uses the
-    same run, so this is hour of day relabelled (at 09:20, 12-18h is only 00:00-01:00 of D, n = 62). Use
+    same run, so this is hour of day relabelled (at 09:20, 12-18h is only the 00:00 and 01:00 hours of D, n = 62). Use
     `/api/accuracy/lead-time` for how error changes with lead time.
   - `byForecastLevel`: 4 GW buckets of the **decision-time forecast** (never the actual, which is unknown when
     buying), `from`/`to` in MW, label in GW. `overForecastShare` = fraction (0..1, 3 decimals) of hours with
@@ -128,8 +130,12 @@ response for the default request (first row of each list shown).
 - `byDay`: one row per delivery day with comparable hours; `forecastMWh`/`actualMWh` are summed over those hours.
 - `series`: every hour in the window that has a decision-time forecast; `actual`/`error` are `null` where the
   outturn is missing.
-- There is no band-coverage field: the P10-P90 backtest (85.2% inside at 09:20) is computed from the decision
-  table offline and pinned in `backend/tests/test_band.py`.
+- `band`: backtest of the decision-time P10-P90 band over the window. `n` = comparable hours that have a band
+  (hours whose band is unavailable are excluded, so `n` can be below `forecast.n` early in the snapshot).
+  `coverage_pct` = % of those hours with `p10 <= actual <= p90`, `belowP10_pct` = % with `actual < p10`,
+  `aboveP90_pct` = % with `actual > p90` (the three sum to 100 up to rounding). All three are `null` when
+  `n = 0`. `nominal_pct` is always 80 (the interval's design coverage). At 09:20 over the scope window the band
+  covers 85.2% (10.6% below, 4.2% above): slightly wide, and misses are mostly wind shortfalls below P10.
 
 ## `GET /api/accuracy/lead-time?start=2026-01-02&end=2026-02-01`
 Accuracy of **every** WINDFOR run (not only the decision-time one) by lead time, to show how much a later or earlier decision would change forecast quality.
@@ -150,5 +156,6 @@ Every error body is `{"detail": ...}`.
   `"'cutoff' must be HH:MM (24h), got '9:20'"`), or `start > end`.
 - `400` when a required parameter is missing (`date` on `/api/decision`); here `detail` is FastAPI's list of
   validation errors, e.g. `[{"type": "missing", "loc": ["query", "date"], "msg": "Field required", ...}]`.
-- `404` when the day or window has no comparable data (`detail` is a message string).
+- `404` when the day or window has no comparable data, including a window entirely outside the data range
+  (`detail` is a message string, e.g. `"No data between 2027-01-01 and 2027-01-31; available 2025-11-28..2026-02-01"`).
 - `404` for unknown `/api/...` paths (the SPA fallback never answers under `/api`).

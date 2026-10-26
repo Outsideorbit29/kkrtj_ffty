@@ -31,6 +31,7 @@ def create_app(settings: config.Settings | None = None) -> FastAPI:
         yield
 
     app = FastAPI(title="Wind Forecast Decision API", version="1.0.0", lifespan=lifespan)
+    app.state.settings = settings  # lets get_dataset load lazily where lifespan doesn't run (serverless)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
 
     @app.exception_handler(RequestValidationError)

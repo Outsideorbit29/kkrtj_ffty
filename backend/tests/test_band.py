@@ -111,3 +111,5 @@ def test_band_coverage_snapshot(dataset):
     assert t[["p10", "p50", "p90"]].notna().all().all()
     inside = (t["actual"] >= t["p10"]) & (t["actual"] <= t["p90"])
     assert inside.mean() == pytest.approx(0.852, abs=0.005)
+    assert (t["actual"] < t["p10"]).mean() == pytest.approx(0.106, abs=0.005)
+    assert (t["actual"] > t["p90"]).mean() == pytest.approx(0.042, abs=0.005)

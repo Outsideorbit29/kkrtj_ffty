@@ -14,11 +14,12 @@ SUMMARY_KEYS = {
     "mae", "bias", "trailingMedianError",
 }  # fmt: skip
 ACCURACY_KEYS = {
-    "start", "end", "cutoff", "forecast", "forecastAdjusted", "baselines", "skill",
+    "start", "end", "cutoff", "forecast", "forecastAdjusted", "baselines", "skill", "band",
     "byHorizon", "byForecastLevel", "byHourOfDay", "byDay", "histogram", "series",
 }  # fmt: skip
 SKILL_KEYS = {"vsPersistence_pct", "vsSameHourD2_pct", "adjustedVsForecast_pct", "adjustedVsPersistence_pct"}
 FORECAST_LEVEL_KEYS = {"bucket", "from", "to", "n", "mae", "bias", "overForecastShare"}
+BAND_KEYS = ("n", "coverage_pct", "belowP10_pct", "aboveP90_pct", "nominal_pct")
 
 
 def test_health(client):
@@ -134,6 +135,12 @@ def test_accuracy_default_window(client):
         assert row["bucket"] == f"{row['from'] // 1000}-{row['to'] // 1000} GW"
         assert 0 <= row["overForecastShare"] <= 1
 
+    band = body["band"]
+    assert tuple(band) == BAND_KEYS
+    assert band["n"] == forecast["n"] and band["nominal_pct"] == 80
+    parts = band["coverage_pct"] + band["belowP10_pct"] + band["aboveP90_pct"]
+    assert parts == pytest.approx(100, abs=0.15)
+
     assert sum(b["n"] for b in body["byHorizon"]) == forecast["n"]
     assert all(b["bucket"] == f"{b['horizonFrom']}-{b['horizonTo']}h" for b in body["byHorizon"])
     assert [h["hour"] for h in body["byHourOfDay"]] == list(range(24))
@@ -161,6 +168,11 @@ def test_accuracy_headline_snapshot(client):
     assert adjusted["mae"] == pytest.approx(1445.8, abs=0.5)
     assert adjusted["rmse"] == pytest.approx(1909.0, abs=0.5)
     assert adjusted["bias"] == pytest.approx(649.3, abs=0.5)
+    band = body["band"]
+    assert band["n"] == 744
+    assert band["coverage_pct"] == pytest.approx(85.2, abs=0.05)
+    assert band["belowP10_pct"] == pytest.approx(10.6, abs=0.05)
+    assert band["aboveP90_pct"] == pytest.approx(4.2, abs=0.05)
 
 
 def test_accuracy_15_30_does_not_use_the_run_published_at_closure(client):
@@ -184,6 +196,16 @@ def test_partial_coverage_cutoff(client):
     for row in uncovered:
         assert row["p50"] is None and row["p10"] is None and row["p90"] is None
         assert row["horizonHours"] is None and row["error"] is None
+
+
+def test_band_coverage_excludes_hours_without_band(client):
+    # The first snapshot days have too little error history for a band.
+    body = client.get("/api/accuracy", params={"start": "2025-11-28", "end": "2025-12-15"}).json()
+    assert 0 < body["band"]["n"] < body["forecast"]["n"]
+    body = client.get("/api/accuracy", params={"start": "2025-11-28", "end": "2025-11-28"}).json()
+    assert body["band"] == {
+        "n": 0, "coverage_pct": None, "belowP10_pct": None, "aboveP90_pct": None, "nominal_pct": 80,
+    }  # fmt: skip
 
 
 def test_band_unavailable_without_history(client):
@@ -263,3 +285,13 @@ def test_no_data_is_404(client, path, params):
 def test_cors_allows_get(client):
     response = client.get("/api/health", headers={"Origin": "http://localhost:5173"})
     assert response.headers["access-control-allow-origin"] == "*"
+
+
+def test_dataset_loads_lazily_without_lifespan():
+    """Serverless runtimes (Vercel) may skip ASGI lifespan; the first request must still work."""
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    client = TestClient(create_app())  # not used as a context manager, so lifespan never runs
+    assert client.get("/api/meta").status_code == 200

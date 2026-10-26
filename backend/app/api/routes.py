@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from app import config
 from app.api.params import parse_cutoff, parse_date, parse_window
-from app.data import Dataset
+from app.data import Dataset, load_dataset
 from app.reports.accuracy import accuracy_report, lead_time_report
 from app.reports.decision import decision_report
 from app.serialize import ISO_Z
@@ -20,7 +20,10 @@ DEFAULT_END = config.DELIVERY_END.isoformat()
 
 
 def get_dataset(request: Request) -> Dataset:
-    return request.app.state.dataset
+    state = request.app.state
+    if not hasattr(state, "dataset"):
+        state.dataset = load_dataset(state.settings)
+    return state.dataset
 
 
 DatasetDep = Annotated[Dataset, Depends(get_dataset)]

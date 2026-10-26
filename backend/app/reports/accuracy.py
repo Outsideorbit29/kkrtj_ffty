@@ -58,6 +58,7 @@ def accuracy_report(ds: Dataset, start: date, end: date, cutoff: time) -> dict[s
         "forecastAdjusted": metrics(adjusted),
         "baselines": baselines,
         "skill": skill,
+        "band": _band_coverage(comparable),
         "byHorizon": _by_horizon(comparable),
         "byForecastLevel": _by_forecast_level(comparable),
         "byHourOfDay": _by_hour_of_day(comparable),
@@ -81,6 +82,25 @@ def lead_time_report(ds: Dataset, start: date, end: date) -> dict[str, Any]:
 
 def _or_none(value: float) -> float | None:
     return None if pd.isna(value) else float(value)
+
+
+def _band_coverage(comparable: pd.DataFrame) -> dict[str, Any]:
+    """Backtest of the decision-time P10-P90 band: where the actual fell (hours without a band excluded)."""
+    banded = comparable.dropna(subset=["p10", "p90"])
+    n = len(banded)
+    below = banded["actual"] < banded["p10"]
+    above = banded["actual"] > banded["p90"]
+
+    def pct(mask: pd.Series) -> float | None:
+        return num(mask.mean() * 100) if n else None
+
+    return {
+        "n": n,
+        "coverage_pct": pct(~below & ~above),
+        "belowP10_pct": pct(below),
+        "aboveP90_pct": pct(above),
+        "nominal_pct": config.BAND_NOMINAL_PCT,
+    }
 
 
 def _by_horizon(comparable: pd.DataFrame) -> list[dict[str, Any]]:
