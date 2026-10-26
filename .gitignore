@@ -1,7 +1,16 @@
+# Python
 __pycache__/
 *.pyc
 .venv/
-.env
+.pytest_cache/
+.ruff_cache/
+
+# Node / frontend build
 node_modules/
-backend/data/cache/
 frontend/dist/
+
+# Backend runtime artefacts (backend/data/snapshot is committed)
+backend/data/cache/
+backend/static/
+
+.env
