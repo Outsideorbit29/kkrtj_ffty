@@ -9,7 +9,7 @@ purchase decision made in January 2026:
 2. **How far can that forecast be trusted?** It measures accuracy against metered outturn (Elexon FUELHH),
    compares it with naive baselines, and breaks the error down by lead time, wind level, hour and day.
 
-Live app: _deployment link to be added_
+**Live app: https://kkrtjffty.vercel.app** (Vercel). The accuracy view is at https://kkrtjffty.vercel.app/?view=accuracy.
 
 ## Headline findings (January 2026, 09:20 gate closure)
 
@@ -219,7 +219,10 @@ bundled snapshot.
 Vercel, or run `vercel --prod` from the repo root. Vercel runs `npm ci` and `npm run build` in `frontend/`,
 serves `frontend/dist` as static files, and runs the FastAPI app as one Python function that bundles
 `backend/app` and `backend/data/snapshot`. `/api/*` is rewritten to that function and every other path to
-`index.html`.
+`index.html`. Python 3.12 is pinned via `.python-version`; the root `requirements.txt` lists the runtime
+pins explicitly because Vercel does not follow `-r` includes, and `backend/tests/test_vercel.py` checks
+that they match `backend/requirements.txt`. Vercel's runtime may skip the ASGI lifespan, so the API loads
+the snapshot on first request when needed. The live deployment is https://kkrtjffty.vercel.app.
 
 **Heroku** (container stack, `heroku.yml` + `Dockerfile`):
 
