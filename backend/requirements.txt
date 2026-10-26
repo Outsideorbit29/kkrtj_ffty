@@ -1,5 +1,6 @@
-fastapi==0.115.*
-uvicorn[standard]==0.32.*
-httpx==0.27.*
-pandas==2.2.*
-pytest==8.3.*
+# Runtime. Pins chosen to have wheels for CPython 3.12 (Docker) and 3.14 (local).
+fastapi==0.162.*
+uvicorn[standard]==0.54.*
+httpx==0.28.*
+pandas==2.3.*
+numpy==2.3.*  # numpy 2.5 makes pandas 2.3 emit timedelta deprecation warnings

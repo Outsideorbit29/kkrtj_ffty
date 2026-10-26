@@ -1,0 +1,30 @@
+{
+  "createdUtc": "2026-10-26T17:10:39Z",
+  "source": "Elexon BMRS (https://data.elexon.co.uk/bmrs/api/v1/datasets)",
+  "actuals": {
+    "file": "actuals.csv.gz",
+    "dataset": "FUELHH",
+    "fuelType": "WIND",
+    "settlementDateFrom": "2025-11-28",
+    "settlementDateTo": "2026-02-02",
+    "rows": 3216,
+    "startTime": {
+      "min": "2025-11-28T00:00:00Z",
+      "max": "2026-02-02T23:30:00Z"
+    },
+    "notes": "Latest publishTime kept per startTime."
+  },
+  "forecasts": {
+    "file": "forecasts.csv.gz",
+    "dataset": "WINDFOR",
+    "publishDateTimeFrom": "2025-11-27T00:00:00Z",
+    "publishDateTimeTo": "2026-02-01T00:00:00Z",
+    "rows": 30622,
+    "runs": 528,
+    "publishTime": {
+      "min": "2025-11-27T02:30:00Z",
+      "max": "2026-01-31T22:30:00Z"
+    },
+    "notes": "Only points with startTime > publishTime."
+  }
+}
