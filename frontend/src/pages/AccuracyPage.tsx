@@ -1,8 +1,20 @@
 import { useMemo } from 'react';
-import type { Accuracy, BandCoverage, DayStat, HhMm, HistogramBin, HourOfDayStat, LeadTime, LeadTimePoint, Meta } from '../api/types';
+import type {
+  Accuracy,
+  BandCoverage,
+  DayStat,
+  ForecastLevelBucket,
+  HhMm,
+  HistogramBin,
+  HourOfDayStat,
+  LeadTime,
+  LeadTimePoint,
+  Meta,
+} from '../api/types';
 import { ChartCard } from '../components/ChartCard';
 import { DailyErrorChart } from '../components/charts/DailyErrorChart';
 import { ErrorHistogram } from '../components/charts/ErrorHistogram';
+import { ForecastLevelChart } from '../components/charts/ForecastLevelChart';
 import { ForecastActualChart } from '../components/charts/ForecastActualChart';
 import { HourOfDayChart } from '../components/charts/HourOfDayChart';
 import { LeadTimeChart } from '../components/charts/LeadTimeChart';
@@ -14,7 +26,7 @@ import { CardSkeleton, ErrorState, KpiSkeleton, LoadingStatus, Skeleton } from '
 import { useAccuracy, useLeadTime } from '../hooks/api';
 import type { Resource } from '../hooks/useApiResource';
 import { useUrlState } from '../hooks/useUrlState';
-import { errorSpread, leadTimeSummary } from '../lib/chartData';
+import { errorSpread, forecastLevelTrend, leadTimeSummary } from '../lib/chartData';
 import { clampDate, formatCalendarDate, isIsoDate } from '../lib/dates';
 import { formatBin, formatEnergy, formatMw, formatPct, formatPower, hourLabel } from '../lib/format';
 
@@ -35,10 +47,16 @@ function bandTag(band: BandCoverage): { text: string; tone: TagTone } | undefine
   return gap > 5 ? { text: 'Conservative', tone: 'good' } : { text: 'Calibrated', tone: 'good' };
 }
 
+/** % MAE improvement of the bias-corrected P50 over the raw forecast. */
+function adjustedTag(gainPct: number | null): { text: string; tone: TagTone } | undefined {
+  if (gainPct == null) return undefined;
+  const size = formatPct(Math.abs(gainPct), { digits: 0 });
+  return gainPct > 0 ? { text: `${size} lower than raw`, tone: 'good' } : { text: `${size} higher than raw`, tone: 'bad' };
+}
+
 function AccuracyKpis({ a }: { a: Accuracy }) {
   const f = a.forecast;
-  // Guard against an older backend that does not send `band` yet.
-  const band = a.band as BandCoverage | undefined;
+  const { band, forecastAdjusted: adj } = a;
   return (
     <div className="kpi-grid">
       <KpiTile
@@ -76,14 +94,22 @@ function AccuracyKpis({ a }: { a: Accuracy }) {
         tag={skillTag(a.skill.vsSameHourD2_pct)}
         detail={`MAE reduction vs repeating the same hour two days earlier (${formatPower(a.baselines.sameHourD2.mae)})`}
       />
-      {band && (
-        <KpiTile
-          label="P10–P90 band coverage"
-          value={formatPct(band.coverage_pct, { digits: 0 })}
-          tag={bandTag(band)}
-          detail={`Actual inside the band in ${band.n.toLocaleString('en-GB')} hours tested (nominal ${band.nominal_pct}%) · below P10 ${formatPct(band.belowP10_pct)}, above P90 ${formatPct(band.aboveP90_pct)}`}
-        />
-      )}
+      <KpiTile
+        label="Bias-corrected MAE (P50)"
+        value={formatPower(adj.mae)}
+        tag={adjustedTag(a.skill.adjustedVsForecast_pct)}
+        detail={
+          adj.n > 0
+            ? `Forecast minus its trailing 28-day median error, vs ${formatPower(f.mae)} raw · bias ${formatPower(adj.bias, { signed: true })}`
+            : 'Unavailable: too little error history in this range'
+        }
+      />
+      <KpiTile
+        label="P10–P90 band coverage"
+        value={formatPct(band.coverage_pct, { digits: 0 })}
+        tag={bandTag(band)}
+        detail={`Actual inside the band in ${band.n.toLocaleString('en-GB')} hours tested (nominal ${band.nominal_pct}%) · below P10 ${formatPct(band.belowP10_pct)}, above P90 ${formatPct(band.aboveP90_pct)}`}
+      />
     </div>
   );
 }
@@ -133,6 +159,21 @@ const dayTable = (rows: DayStat[]) => (
   />
 );
 
+const forecastLevelTable = (rows: ForecastLevelBucket[]) => (
+  <DataTable
+    caption="Forecast error by decision-time forecast level"
+    rows={rows}
+    rowKey={(r) => String(r.from)}
+    columns={[
+      { header: 'Forecast level', cell: (r) => r.bucket },
+      { header: 'Hours', cell: (r) => r.n.toLocaleString('en-GB') },
+      { header: 'MAE MW', cell: (r) => formatMw(r.mae) },
+      { header: 'Bias MW', cell: (r) => formatMw(r.bias, { signed: true }), className: (r) => (r.bias > 0 ? 'pos' : undefined) },
+      { header: 'Hours over-forecast', cell: (r) => formatPct(r.overForecastShare * 100, { digits: 0 }) },
+    ]}
+  />
+);
+
 const histogramTable = (bins: HistogramBin[]) => (
   <DataTable
     caption="Distribution of hourly forecast errors"
@@ -167,6 +208,23 @@ function leadTimeCaption(a: Accuracy, leadTime: LeadTime | undefined, horizon: {
     `Waiting until delivery only trims this to ≈ ${formatPower(first.mae)} at ${first.leadFrom}–${first.leadTo} h. ` +
     `MAE grows with lead time but the bias does not: it is ≈ ${signed(win.bias)} in your window and still ${signed(first.bias)} at ${first.leadFrom}–${first.leadTo} h, ` +
     'so correcting for bias is a bigger lever than deciding later.'
+  );
+}
+
+/** Forecast-level caption: does the over-forecast grow with wind level, and what that suggests. */
+function forecastLevelCaption(buckets: ForecastLevelBucket[]): string {
+  const trend = forecastLevelTrend(buckets);
+  const curtailment =
+    'That pattern is consistent with curtailment: on windy days transmission constraints cap metered output, while the forecast is not capped.';
+  if (!trend) return `Bias by the forecast you saw at decision time. ${curtailment}`;
+  const { low, high, rising } = trend;
+  if (!rising) {
+    return `In this range the bias does not grow with wind level (${signed(low.bias)} at ${low.bucket}, ${signed(high.bias)} at ${high.bucket}), so a flat correction is a fair approximation.`;
+  }
+  return (
+    `The over-forecast grows with wind level: ${signed(low.bias)} when ${low.bucket} is forecast, ${signed(high.bias)} at ${high.bucket}, ` +
+    `where ${formatPct(high.overForecastShare * 100, { digits: 0 })} of hours came in below forecast. ${curtailment} ` +
+    'On high-wind days, expect a bigger shortfall than a flat correction implies.'
   );
 }
 
@@ -247,12 +305,12 @@ function AccuracyContent({ a, leadTime, stale }: { a: Accuracy; leadTime: Resour
           )}
         </ChartCard>
         <ChartCard
-          title="MAE by hour of day"
-          subtitle="Decision-time forecast · GW, UK hours"
-          caption="Hours with bigger typical misses need more flexible cover than the forecast alone suggests."
-          table={hourTable(a.byHourOfDay)}
+          title="Bias by forecast level"
+          subtitle="Mean forecast − actual by the decision-time forecast, 4 GW buckets · GW"
+          caption={forecastLevelCaption(a.byForecastLevel)}
+          table={forecastLevelTable(a.byForecastLevel)}
         >
-          <HourOfDayChart hours={a.byHourOfDay} />
+          <ForecastLevelChart buckets={a.byForecastLevel} />
         </ChartCard>
       </div>
       <div className="grid-2">
@@ -273,6 +331,14 @@ function AccuracyContent({ a, leadTime, stale }: { a: Accuracy; leadTime: Resour
           <ErrorHistogram bins={a.histogram} />
         </ChartCard>
       </div>
+      <ChartCard
+        title="MAE by hour of day"
+        subtitle="Decision-time forecast · GW, UK hours"
+        caption="Hours with bigger typical misses need more flexible cover than the forecast alone suggests."
+        table={hourTable(a.byHourOfDay)}
+      >
+        <HourOfDayChart hours={a.byHourOfDay} />
+      </ChartCard>
     </div>
   );
 }
@@ -316,7 +382,7 @@ export function AccuracyPage({ meta, cutoff }: { meta: Meta; cutoff: HhMm }) {
         <AccuracyContent a={data} leadTime={leadTime} stale={loading} />
       ) : (
         <div className="stack">
-          <KpiSkeleton count={8} />
+          <KpiSkeleton count={9} />
           <CardSkeleton height={300} />
           <div className="grid-2">
             <CardSkeleton height={260} />

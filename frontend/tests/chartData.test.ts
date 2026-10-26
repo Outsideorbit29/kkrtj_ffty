@@ -1,7 +1,7 @@
 // Run with `npm test` (Node's built-in runner; Node >= 22.6 strips the TypeScript types).
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import type { ForecastRun, HourlyRow, LeadTimePoint } from '../src/api/types';
+import type { ForecastLevelBucket, ForecastRun, HourlyRow, LeadTimePoint } from '../src/api/types';
 import {
   HOUR_MS,
   bandBacktest,
@@ -9,6 +9,7 @@ import {
   buildRunsPoints,
   errorSpread,
   expectedEnergy,
+  forecastLevelTrend,
   leadTimeSummary,
 } from '../src/lib/chartData.ts';
 import { toCsv, withBom } from '../src/lib/csv.ts';
@@ -137,6 +138,31 @@ describe('lead time', () => {
   it('separates spread from bias', () => {
     assert.equal(errorSpread({ rmse: 5, bias: 3 }), 4);
     assert.equal(errorSpread({ rmse: 1, bias: 2 }), 0);
+  });
+});
+
+describe('forecastLevelTrend', () => {
+  const level = (fromGw: number, n: number, bias: number): ForecastLevelBucket => ({
+    bucket: `${fromGw}-${fromGw + 4} GW`,
+    from: fromGw * 1000,
+    to: (fromGw + 4) * 1000,
+    n,
+    mae: Math.abs(bias),
+    bias,
+    overForecastShare: bias > 0 ? 0.9 : 0.4,
+  });
+
+  it('compares the end buckets, skipping thin ones', () => {
+    const t = forecastLevelTrend([level(20, 43, 4_500), level(0, 7, 1_100), level(4, 133, 280), level(16, 228, 2_500)])!;
+    assert.equal(t.low.from, 4_000);
+    assert.equal(t.high.from, 20_000);
+    assert.equal(t.rising, true);
+    assert.equal(forecastLevelTrend([level(4, 100, 900), level(16, 100, 300)])!.rising, false);
+  });
+
+  it('needs two solid buckets', () => {
+    assert.equal(forecastLevelTrend([level(8, 200, 1_000), level(0, 5, 100)]), undefined);
+    assert.equal(forecastLevelTrend([]), undefined);
   });
 });
 

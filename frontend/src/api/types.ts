@@ -117,6 +117,18 @@ export interface HorizonBucket {
   bias: number;
 }
 
+/** Error by decision-time forecast level: 4 GW buckets `[from, to)` in MW, label in GW (`"8-12 GW"`). */
+export interface ForecastLevelBucket {
+  bucket: string;
+  from: number;
+  to: number;
+  n: number;
+  mae: number;
+  bias: number;
+  /** Fraction (0..1) of hours with `error > 0` (forecast above outturn). */
+  overForecastShare: number;
+}
+
 export interface HourOfDayStat {
   hour: number;
   n: number;
@@ -152,20 +164,30 @@ export interface Accuracy {
   end: IsoDate;
   cutoff: HhMm;
   forecast: ErrorMetrics;
+  /**
+   * Same metrics for the bias-corrected P50 (hours where it exists). With `n` = 0 (no band history)
+   * every other value is null.
+   */
+  forecastAdjusted: ErrorMetrics;
   baselines: {
     persistence: ErrorMetrics;
     sameHourD2: ErrorMetrics;
   };
+  /** MAE skill scores in %; null when either MAE is missing or the reference MAE is 0. */
   skill: {
     vsPersistence_pct: number;
     vsSameHourD2_pct: number;
+    /** `(1 - mae_p50 / mae_forecast) * 100`: how much the bias correction cuts the raw MAE. */
+    adjustedVsForecast_pct: number | null;
+    adjustedVsPersistence_pct: number | null;
   };
+  band: BandCoverage;
   byHorizon: HorizonBucket[];
+  byForecastLevel: ForecastLevelBucket[];
   byHourOfDay: HourOfDayStat[];
   byDay: DayStat[];
   histogram: HistogramBin[];
   series: SeriesPoint[];
-  band: BandCoverage;
 }
 
 /**

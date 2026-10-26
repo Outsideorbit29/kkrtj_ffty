@@ -2,7 +2,7 @@
  * Pure data shaping for charts and KPI tiles. This module has no runtime imports (types only),
  * so `npm test` can run it directly under Node's built-in test runner.
  */
-import type { ForecastRun, HalfHourlyActual, HourlyRow, LeadTimePoint } from '../api/types';
+import type { ForecastLevelBucket, ForecastRun, HalfHourlyActual, HourlyRow, LeadTimePoint } from '../api/types';
 
 export const HOUR_MS = 3_600_000;
 export const HALF_HOUR_MS = HOUR_MS / 2;
@@ -143,4 +143,26 @@ export function leadTimeSummary(points: LeadTimePoint[], horizon?: { from: numbe
       }
     : undefined;
   return { first, window };
+}
+
+/* ---------- Forecast level ---------- */
+
+export interface ForecastLevelTrend {
+  /** Lowest and highest forecast-level buckets with at least `minHours` hours. */
+  low: ForecastLevelBucket;
+  high: ForecastLevelBucket;
+  /** True when the bias in the top bucket exceeds the bias in the bottom one. */
+  rising: boolean;
+}
+
+/**
+ * Compares bias at the low and high ends of the forecast range, ignoring thin buckets (default:
+ * fewer than a day's worth of hours) so a handful of calm hours cannot set the story.
+ */
+export function forecastLevelTrend(buckets: ForecastLevelBucket[], minHours = 24): ForecastLevelTrend | undefined {
+  const solid = buckets.filter((b) => b.n >= minHours).sort((a, b) => a.from - b.from);
+  const low = solid[0];
+  const high = solid.at(-1);
+  if (!low || !high || low === high) return undefined;
+  return { low, high, rising: high.bias > low.bias };
 }
