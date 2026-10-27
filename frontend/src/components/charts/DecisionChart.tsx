@@ -2,12 +2,25 @@ import { useMemo } from 'react';
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { HalfHourlyActual, HourlyRow } from '../../api/types';
 import { useChartTheme } from '../../hooks/useChartTheme';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { buildDecisionPoints } from '../../lib/chartData';
 import { formatPower, formatTime, gwTick, toMs } from '../../lib/format';
 import type { ChartTheme } from '../../lib/theme';
 import { Legend } from '../Legend';
 import { TooltipFrame, type TooltipRow } from '../TooltipFrame';
-import { CHART_MARGIN, HALF_HOUR_MS, HOUR_MS, axisStyle, labelToNumber, timeTicks, yAxisStyle, niceScale } from './common';
+import {
+  CHART_MARGIN,
+  HALF_HOUR_MS,
+  HOUR_MS,
+  NARROW_QUERY,
+  ROUND_LINE,
+  axisStyle,
+  labelToNumber,
+  lineCursor,
+  niceScale,
+  timeTicks,
+  yAxisStyle,
+} from './common';
 
 function DecisionTooltip(props: {
   t: number | undefined;
@@ -54,6 +67,7 @@ interface DecisionChartProps {
 
 export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) {
   const theme = useChartTheme();
+  const narrow = useMediaQuery(NARROW_QUERY);
   const points = useMemo(() => buildDecisionPoints(hourly, actualHalfHourly), [hourly, actualHalfHourly]);
   const hourlyByTime = useMemo(() => new Map(hourly.map((r) => [toMs(r.startTime), r])), [hourly]);
   const halfByTime = useMemo(
@@ -87,22 +101,22 @@ export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) 
             : []),
         ]}
       />
-      <div className="chart" style={{ height: 320 }}>
+      <div className="chart chart--hero">
         <ResponsiveContainer>
           <ComposedChart data={points} margin={CHART_MARGIN} accessibilityLayer>
-            <CartesianGrid vertical={false} stroke={theme.grid} />
+            <CartesianGrid vertical={false} stroke={theme.grid} strokeWidth={1} />
             <XAxis
               dataKey="t"
               type="number"
               scale="time"
               domain={[from, to]}
-              ticks={timeTicks(from, to, 3 * HOUR_MS)}
+              ticks={timeTicks(from, to, (narrow ? 6 : 3) * HOUR_MS)}
               tickFormatter={formatTime}
               {...axisStyle(theme)}
             />
-            <YAxis tickFormatter={gwTick} {...yScale} {...yAxisStyle(theme)} />
+            <YAxis tickFormatter={gwTick} {...yScale} {...yAxisStyle(theme, narrow)} />
             <Tooltip
-              cursor={{ stroke: theme.axis, strokeWidth: 1 }}
+              cursor={lineCursor(theme)}
               isAnimationActive={false}
               content={({ label }) => (
                 <DecisionTooltip t={labelToNumber(label)} hourly={hourlyByTime} halfHourly={halfByTime} theme={theme} />
@@ -112,8 +126,8 @@ export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) 
               dataKey="band"
               type="stepAfter"
               stroke="none"
-              fill={theme.forecast}
-              fillOpacity={0.14}
+              fill={theme.band}
+              fillOpacity={1}
               connectNulls
               isAnimationActive={false}
               activeDot={false}
@@ -122,8 +136,9 @@ export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) 
               dataKey="halfHourly"
               type="stepAfter"
               stroke={theme.actual}
-              strokeOpacity={0.45}
+              strokeOpacity={0.4}
               strokeWidth={1}
+              {...ROUND_LINE}
               dot={false}
               activeDot={false}
               connectNulls
@@ -133,8 +148,10 @@ export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) 
               dataKey="forecast"
               type="stepAfter"
               stroke={theme.forecast}
-              strokeWidth={hasP50 ? 1.5 : 2}
-              strokeDasharray={hasP50 ? '5 3' : undefined}
+              strokeWidth={hasP50 ? 1.25 : 2}
+              strokeDasharray={hasP50 ? '4 3' : undefined}
+              strokeOpacity={hasP50 ? 0.85 : 1}
+              {...ROUND_LINE}
               dot={false}
               activeDot={false}
               connectNulls
@@ -144,7 +161,8 @@ export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) 
               dataKey="actual"
               type="stepAfter"
               stroke={theme.actual}
-              strokeWidth={2}
+              strokeWidth={1.75}
+              {...ROUND_LINE}
               dot={false}
               activeDot={false}
               connectNulls
@@ -155,7 +173,8 @@ export function DecisionChart({ hourly, actualHalfHourly }: DecisionChartProps) 
                 dataKey="p50"
                 type="stepAfter"
                 stroke={theme.forecast}
-                strokeWidth={2.5}
+                strokeWidth={2}
+                {...ROUND_LINE}
                 dot={false}
                 activeDot={false}
                 connectNulls

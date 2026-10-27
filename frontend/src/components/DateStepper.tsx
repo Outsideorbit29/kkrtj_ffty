@@ -21,10 +21,10 @@ export function DateStepper({ label, value, min, max, onChange }: DateStepperPro
       <label className="control__label" htmlFor={id}>
         {label}
       </label>
-      <div className="control__row">
+      <div className="stepper">
         <button
           type="button"
-          className="btn btn--icon"
+          className="stepper__btn stepper__btn--prev"
           onClick={() => step(-1)}
           disabled={value <= min}
           aria-label="Previous day"
@@ -33,7 +33,7 @@ export function DateStepper({ label, value, min, max, onChange }: DateStepperPro
         </button>
         <input
           id={id}
-          className="input"
+          className="input stepper__input"
           type="date"
           min={min}
           max={max}
@@ -45,7 +45,7 @@ export function DateStepper({ label, value, min, max, onChange }: DateStepperPro
         />
         <button
           type="button"
-          className="btn btn--icon"
+          className="stepper__btn stepper__btn--next"
           onClick={() => step(1)}
           disabled={value >= max}
           aria-label="Next day"

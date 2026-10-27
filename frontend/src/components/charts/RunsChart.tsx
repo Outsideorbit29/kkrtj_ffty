@@ -2,17 +2,29 @@ import { useMemo } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ForecastRun, HourlyRow } from '../../api/types';
 import { useChartTheme } from '../../hooks/useChartTheme';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { buildRunsPoints, runKey, type RunsPoint as Point } from '../../lib/chartData';
 import { formatDayTime, formatPower, formatTime, gwTick, toMs } from '../../lib/format';
 import type { ChartTheme } from '../../lib/theme';
 import { Legend } from '../Legend';
 import { TooltipFrame, type TooltipRow } from '../TooltipFrame';
-import { CHART_MARGIN, HOUR_MS, axisStyle, labelToNumber, timeTicks, yAxisStyle, niceScale } from './common';
+import {
+  CHART_MARGIN,
+  HOUR_MS,
+  NARROW_QUERY,
+  ROUND_LINE,
+  axisStyle,
+  labelToNumber,
+  lineCursor,
+  niceScale,
+  timeTicks,
+  yAxisStyle,
+} from './common';
 
 function lineStyle(run: ForecastRun, theme: ChartTheme) {
-  if (run.isDecisionRun) return { stroke: theme.forecast, strokeWidth: 2.5 };
-  if (run.availableAtDecision) return { stroke: theme.muted, strokeWidth: 1.25 };
-  return { stroke: theme.muted, strokeWidth: 1.25, strokeDasharray: '4 3', strokeOpacity: 0.7 };
+  if (run.isDecisionRun) return { stroke: theme.forecast, strokeWidth: 2 };
+  if (run.availableAtDecision) return { stroke: theme.muted, strokeWidth: 1 };
+  return { stroke: theme.muted, strokeWidth: 1.25, strokeDasharray: '3 3' };
 }
 
 function RunsTooltip({ point, runs, theme }: { point: Point | undefined; runs: ForecastRun[]; theme: ChartTheme }) {
@@ -48,6 +60,7 @@ interface RunsChartProps {
 
 export function RunsChart({ runs, hourly }: RunsChartProps) {
   const theme = useChartTheme();
+  const narrow = useMediaQuery(NARROW_QUERY);
   // `points` adds a closing point at midnight; `pointByTime` holds only real hour starts.
   const { points, byHour: pointByTime } = useMemo(() => buildRunsPoints(runs, hourly), [runs, hourly]);
   // Draw the decision run last so it sits on top.
@@ -82,22 +95,22 @@ export function RunsChart({ runs, hourly }: RunsChartProps) {
           { label: 'Actual', color: theme.actual, kind: 'line' },
         ]}
       />
-      <div className="chart" style={{ height: 280 }}>
+      <div className="chart chart--md">
         <ResponsiveContainer>
           <LineChart data={points} margin={CHART_MARGIN} accessibilityLayer>
-            <CartesianGrid vertical={false} stroke={theme.grid} />
+            <CartesianGrid vertical={false} stroke={theme.grid} strokeWidth={1} />
             <XAxis
               dataKey="t"
               type="number"
               scale="time"
               domain={[from, to]}
-              ticks={timeTicks(from, to, 3 * HOUR_MS)}
+              ticks={timeTicks(from, to, (narrow ? 6 : 3) * HOUR_MS)}
               tickFormatter={formatTime}
               {...axisStyle(theme)}
             />
-            <YAxis tickFormatter={gwTick} {...yScale} {...yAxisStyle(theme)} />
+            <YAxis tickFormatter={gwTick} {...yScale} {...yAxisStyle(theme, narrow)} />
             <Tooltip
-              cursor={{ stroke: theme.axis, strokeWidth: 1 }}
+              cursor={lineCursor(theme)}
               isAnimationActive={false}
               content={({ label }) => {
                 const t = labelToNumber(label);
@@ -117,6 +130,7 @@ export function RunsChart({ runs, hourly }: RunsChartProps) {
                 dot={false}
                 activeDot={false}
                 isAnimationActive={false}
+                {...ROUND_LINE}
                 {...lineStyle(run, theme)}
               />
             ))}
@@ -125,7 +139,8 @@ export function RunsChart({ runs, hourly }: RunsChartProps) {
               type="stepAfter"
               connectNulls
               stroke={theme.actual}
-              strokeWidth={2}
+              strokeWidth={1.75}
+              {...ROUND_LINE}
               dot={false}
               activeDot={false}
               isAnimationActive={false}

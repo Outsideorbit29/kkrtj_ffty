@@ -1,29 +1,31 @@
 import { ApiError } from '../api/client';
 
-export function Skeleton({ height, width = '100%' }: { height: number; width?: number | string }) {
+export function Skeleton({ height, width = '100%' }: { height: number | string; width?: number | string }) {
   return <div className="skeleton" style={{ height, width }} aria-hidden />;
 }
 
-export function KpiSkeleton({ count }: { count: number }) {
+/** Placeholder in the shape of a dashboard: a row of stat cards and a grid of panels. */
+export function DashSkeleton({ kpis = 6, panels = [8, 4, 6, 6] }: { kpis?: number; panels?: number[] }) {
   return (
-    <div className="kpi-grid" aria-hidden>
-      {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="kpi">
-          <Skeleton height={14} width="60%" />
-          <Skeleton height={28} width="75%" />
-          <Skeleton height={12} width="90%" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function CardSkeleton({ height }: { height: number }) {
-  return (
-    <div className="card" aria-hidden>
-      <Skeleton height={18} width="40%" />
-      <div className="skeleton-gap" />
-      <Skeleton height={height} />
+    <div className="dash" aria-hidden>
+      <div className="kpis">
+        {Array.from({ length: kpis }, (_, i) => (
+          <div key={i} className="stat">
+            <Skeleton height={12} width="55%" />
+            <Skeleton height={30} width="45%" />
+            <Skeleton height={12} width="80%" />
+          </div>
+        ))}
+      </div>
+      <div className="grid">
+        {panels.map((span, i) => (
+          <div key={i} className={`card span-${span}`}>
+            <Skeleton height={16} width="40%" />
+            <div className="skeleton-gap" />
+            <Skeleton height={260} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

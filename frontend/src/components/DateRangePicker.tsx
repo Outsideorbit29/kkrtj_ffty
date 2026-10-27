@@ -29,13 +29,13 @@ export function DateRangePicker({ start, end, min, max, onChange }: DateRangePic
   return (
     <fieldset className="control fieldset">
       <legend className="control__label">Delivery days</legend>
-      <div className="control__row">
+      <div className="range">
         <label className="visually-hidden" htmlFor={`${id}-start`}>
           From
         </label>
         <input
           id={`${id}-start`}
-          className="input"
+          className="input range__input"
           type="date"
           min={min}
           max={max}
@@ -43,13 +43,13 @@ export function DateRangePicker({ start, end, min, max, onChange }: DateRangePic
           required
           onChange={(e) => setStart(e.target.value)}
         />
-        <span aria-hidden>–</span>
+        <span className="range__sep" aria-hidden>–</span>
         <label className="visually-hidden" htmlFor={`${id}-end`}>
           To
         </label>
         <input
           id={`${id}-end`}
-          className="input"
+          className="input range__input"
           type="date"
           min={min}
           max={max}
@@ -58,7 +58,7 @@ export function DateRangePicker({ start, end, min, max, onChange }: DateRangePic
           onChange={(e) => setEnd(e.target.value)}
         />
         <button type="button" className="btn" disabled={isFull} onClick={() => onChange(min, max)}>
-          Whole window
+          Full range
         </button>
       </div>
     </fieldset>

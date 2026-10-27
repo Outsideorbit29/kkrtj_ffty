@@ -2,11 +2,12 @@ import { useMemo } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { HistogramBin } from '../../api/types';
 import { useChartTheme } from '../../hooks/useChartTheme';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { formatBin, formatPct, gwTick } from '../../lib/format';
 import type { ChartTheme } from '../../lib/theme';
 import { Legend } from '../Legend';
 import { TooltipFrame } from '../TooltipFrame';
-import { CHART_MARGIN, axisStyle, yAxisStyle, niceScale } from './common';
+import { CHART_MARGIN, NARROW_QUERY, axisStyle, barCursor, niceScale, yAxisStyle } from './common';
 import { RoundedBar } from './RoundedBar';
 
 type Bin = HistogramBin & { share: number };
@@ -20,6 +21,7 @@ function binColor(theme: ChartTheme, bin: HistogramBin): string {
 
 export function ErrorHistogram({ bins }: { bins: HistogramBin[] }) {
   const theme = useChartTheme();
+  const narrow = useMediaQuery(NARROW_QUERY);
   const data = useMemo<Bin[]>(() => {
     const total = bins.reduce((sum, b) => sum + b.count, 0) || 1;
     return bins.map((b) => ({ ...b, share: (b.count / total) * 100 }));
@@ -36,14 +38,20 @@ export function ErrorHistogram({ bins }: { bins: HistogramBin[] }) {
           ...(hasMixedBin ? [{ label: 'Straddles zero', color: theme.muted, kind: 'bar' as const }] : []),
         ]}
       />
-      <div className="chart" style={{ height: 240 }}>
+      <div className="chart chart--lg">
         <ResponsiveContainer>
           <BarChart data={data} margin={CHART_MARGIN} barCategoryGap={2} accessibilityLayer>
-            <CartesianGrid vertical={false} stroke={theme.grid} />
-            <XAxis dataKey="from" tickFormatter={gwTick} interval="preserveStart" minTickGap={8} {...axisStyle(theme)} />
-            <YAxis {...niceScale(data.map((b) => b.count))} {...yAxisStyle(theme)} />
+            <CartesianGrid vertical={false} stroke={theme.grid} strokeWidth={1} />
+            <XAxis
+              dataKey="from"
+              tickFormatter={gwTick}
+              ticks={data.filter((b) => Number.isInteger(b.from / (narrow ? 2000 : 1000))).map((b) => b.from)}
+              interval={0}
+              {...axisStyle(theme)}
+            />
+            <YAxis {...niceScale(data.map((b) => b.count))} {...yAxisStyle(theme, narrow)} />
             <Tooltip
-              cursor={{ fill: theme.grid, fillOpacity: 0.5 }}
+              cursor={barCursor(theme)}
               isAnimationActive={false}
               content={({ payload }) => {
                 const bin = payload?.[0]?.payload as Bin | undefined;

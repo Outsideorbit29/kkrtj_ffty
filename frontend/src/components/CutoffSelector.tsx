@@ -36,22 +36,24 @@ export function CutoffSelector({ value, presets, onChange }: CutoffSelectorProps
   return (
     <form className="control" onSubmit={commitDraft}>
       <label className="control__label" htmlFor={`${id}-preset`}>
-        Decision cutoff (UK time, day before delivery)
+        Cutoff (UK, D-1)
       </label>
       <div className="control__row">
-        <select
-          id={`${id}-preset`}
-          className="select"
-          value={customMode ? CUSTOM : value}
-          onChange={(e) => onSelect(e.target.value)}
-        >
-          {presets.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.value} · {p.label}
-            </option>
-          ))}
-          <option value={CUSTOM}>Custom time…</option>
-        </select>
+        <span className="select-wrap">
+          <select
+            id={`${id}-preset`}
+            className="select"
+            value={customMode ? CUSTOM : value}
+            onChange={(e) => onSelect(e.target.value)}
+          >
+            {presets.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.value} · {p.label}
+              </option>
+            ))}
+            <option value={CUSTOM}>Custom time…</option>
+          </select>
+        </span>
         {customMode && (
           <>
             <label className="visually-hidden" htmlFor={`${id}-custom`}>

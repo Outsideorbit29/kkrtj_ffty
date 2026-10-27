@@ -2,11 +2,22 @@ import { useMemo } from 'react';
 import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { LeadTimePoint } from '../../api/types';
 import { useChartTheme } from '../../hooks/useChartTheme';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { errorSpread } from '../../lib/chartData';
 import { formatPower, gwTick } from '../../lib/format';
 import { Legend } from '../Legend';
 import { TooltipFrame } from '../TooltipFrame';
-import { CHART_MARGIN, axisStyle, labelToNumber, yAxisStyle, niceScale } from './common';
+import {
+  CHART_MARGIN,
+  NARROW_QUERY,
+  ROUND_LINE,
+  axisStyle,
+  dotStyle,
+  labelToNumber,
+  lineCursor,
+  niceScale,
+  yAxisStyle,
+} from './common';
 
 type Point = LeadTimePoint & { mid: number };
 
@@ -18,6 +29,7 @@ interface LeadTimeChartProps {
 
 export function LeadTimeChart({ points, decisionHorizon }: LeadTimeChartProps) {
   const theme = useChartTheme();
+  const narrow = useMediaQuery(NARROW_QUERY);
   const data = useMemo<Point[]>(
     () => points.filter((p) => p.n > 0).map((p) => ({ ...p, mid: (p.leadFrom + p.leadTo) / 2 })),
     [points],
@@ -34,20 +46,20 @@ export function LeadTimeChart({ points, decisionHorizon }: LeadTimeChartProps) {
           { label: 'MAE', color: theme.error, kind: 'line' },
           { label: 'Bias (forecast − actual)', color: theme.over, kind: 'dashed' },
           ...(decisionHorizon
-            ? [{ label: 'Lead times covered by your day-ahead decision', color: theme.error, kind: 'band' as const }]
+            ? [{ label: 'Lead times covered by your day-ahead decision', color: theme.forecast, kind: 'band' as const }]
             : []),
         ]}
       />
-      <div className="chart" style={{ height: 260 }}>
+      <div className="chart chart--sm">
         <ResponsiveContainer>
           <LineChart data={data} margin={CHART_MARGIN} accessibilityLayer>
-            <CartesianGrid vertical={false} stroke={theme.grid} />
+            <CartesianGrid vertical={false} stroke={theme.grid} strokeWidth={1} />
             {decisionHorizon && (
               <ReferenceArea
                 x1={decisionHorizon.from}
                 x2={decisionHorizon.to}
-                fill={theme.error}
-                fillOpacity={0.1}
+                fill={theme.band}
+                fillOpacity={1}
                 stroke="none"
                 ifOverflow="extendDomain"
               />
@@ -60,10 +72,10 @@ export function LeadTimeChart({ points, decisionHorizon }: LeadTimeChartProps) {
               tickFormatter={(h: number) => `${h}h`}
               {...axisStyle(theme)}
             />
-            <YAxis tickFormatter={gwTick} {...yScale} {...yAxisStyle(theme)} />
-            <ReferenceLine y={0} stroke={theme.axis} />
+            <YAxis tickFormatter={gwTick} {...yScale} {...yAxisStyle(theme, narrow)} />
+            <ReferenceLine y={0} stroke={theme.axis} strokeWidth={1} />
             <Tooltip
-              cursor={{ stroke: theme.axis, strokeWidth: 1 }}
+              cursor={lineCursor(theme)}
               isAnimationActive={false}
               content={({ label }) => {
                 const mid = labelToNumber(label);
@@ -87,9 +99,10 @@ export function LeadTimeChart({ points, decisionHorizon }: LeadTimeChartProps) {
               dataKey="mae"
               stroke={theme.error}
               strokeWidth={2}
-              dot={{ r: 4, fill: theme.error, stroke: theme.surface, strokeWidth: 2 }}
-              activeDot={{ r: 5, fill: theme.error, stroke: theme.surface, strokeWidth: 2 }}
+              dot={false}
+              activeDot={dotStyle(theme, theme.error)}
               isAnimationActive={false}
+              {...ROUND_LINE}
             />
             <Line
               dataKey="bias"
@@ -97,8 +110,9 @@ export function LeadTimeChart({ points, decisionHorizon }: LeadTimeChartProps) {
               strokeWidth={2}
               strokeDasharray="4 3"
               dot={false}
-              activeDot={{ r: 4, fill: theme.over, stroke: theme.surface, strokeWidth: 2 }}
+              activeDot={dotStyle(theme, theme.over)}
               isAnimationActive={false}
+              {...ROUND_LINE}
             />
           </LineChart>
         </ResponsiveContainer>

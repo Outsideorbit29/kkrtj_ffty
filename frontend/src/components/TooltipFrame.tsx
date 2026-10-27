@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { LegendKey } from './Legend';
 
 export interface TooltipRow {
   name: string;
@@ -11,23 +12,10 @@ export interface TooltipRow {
 export function TooltipFrame({ title, rows, note }: { title: string; rows: TooltipRow[]; note?: ReactNode }) {
   return (
     <div className="tooltip">
-      <div className="tooltip__title">{title}</div>
+      <div className="tooltip__title label">{title}</div>
       {rows.map((row) => (
         <div key={row.name} className="tooltip__row">
-          <svg width="14" height="8" aria-hidden focusable={false}>
-            {row.color && (
-              <line
-                x1="1"
-                y1="4"
-                x2="13"
-                y2="4"
-                stroke={row.color}
-                strokeWidth={2.5}
-                strokeLinecap="round"
-                strokeDasharray={row.dashed ? '3 3' : undefined}
-              />
-            )}
-          </svg>
+          {row.color ? <LegendKey color={row.color} kind={row.dashed ? 'dashed' : 'line'} /> : <span aria-hidden />}
           <span className="tooltip__name">{row.name}</span>
           <span className="tooltip__value">{row.value}</span>
         </div>
