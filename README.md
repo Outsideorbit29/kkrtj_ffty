@@ -1,3 +1,6 @@
+
+
+
 # Wind Forecast Desk
 
 A day-ahead decision tool for a UK utility's power-buying team. It answers two questions for every
@@ -9,7 +12,8 @@ purchase decision made in January 2026:
 2. **How far can that forecast be trusted?** It measures accuracy against metered outturn (Elexon FUELHH),
    compares it with naive baselines, and breaks the error down by lead time, wind level, hour and day.
 
-**Live app: https://kkrtjffty.vercel.app** (Vercel). The accuracy view is at https://kkrtjffty.vercel.app/?view=accuracy.
+**Live app: https://kkrtjffty.vercel.app** (Vercel). It opens on the Overview dashboard; the sidebar switches to the
+Day-ahead decision, Forecast accuracy and Data explorer views (for example https://kkrtjffty.vercel.app/?view=accuracy).
 
 ## Headline findings (January 2026, 09:20 gate closure)
 
@@ -312,16 +316,19 @@ widths) are constants in `backend/app/config.py`, not env vars, because changing
     ├── eslint.config.js, tsconfig*.json
     ├── index.html, public/favicon.svg
     ├── src/
-    │   ├── main.tsx, App.tsx     entry point; header, tabs and cutoff state
+    │   ├── main.tsx, App.tsx     entry point; dashboard shell, URL state (view, cutoff, dates), day drill-down
     │   ├── api/                  types.ts (mirrors docs/API.md), client.ts (fetch + typed ApiError)
-    │   ├── hooks/                abortable data hooks that keep data while refetching, URL state, chart theme
-    │   ├── lib/                  formatting (MW/GWh, London times), dates, CSV export, chartData.ts (pure data shaping)
-    │   ├── components/           header, cutoff and date controls, KPI tiles, chart card, tables, loading/error states
+    │   ├── hooks/                data hooks with a shared request cache, URL state, chart theme, light/dark toggle
+    │   ├── lib/                  formatting (MW/GWh, London times), dates, CSV export, chartData.ts and
+    │   │                         dashboard.ts (pure data shaping: heatmap, rankings, explorer filters)
+    │   ├── components/           sidebar and top bar, stat cards with sparklines, chart cards, widgets, tables,
+    │   │                         cutoff and date controls, loading/error states
     │   ├── components/charts/    Recharts charts: decision day, forecast runs, forecast vs actual, lead time,
-│   │                         bias by forecast level, daily error, hour of day, error histogram
-    │   ├── pages/                DecisionPage.tsx, AccuracyPage.tsx
+    │   │                         bias by forecast level, daily error, hour of day, error histogram, error
+    │   │                         heatmap, scatter, cumulative energy, model comparison, hourly error
+    │   ├── pages/                OverviewPage, DecisionPage, AccuracyPage, ExplorerPage
     │   └── styles.css            design tokens (light/dark) and component styles
-    └── tests/chartData.test.ts   node:test unit tests for src/lib
+    └── tests/                    node:test unit tests for src/lib (chartData, dashboard, CSV)
 ```
 
 ## Development practices
@@ -330,8 +337,8 @@ widths) are constants in `backend/app/config.py`, not env vars, because changing
   strict "before decision" boundary, the band's no-look-ahead mask, DST days and late runs. Contract tests
   run every endpoint against the real snapshot and pin the headline numbers (MAE 2038.9, bias 1747.9, skill
   50.4 / 53.0, P50 MAE 1445.8, band coverage 85.2 / 10.6 / 4.2). The Elexon client is tested against a
-  mocked transport, so tests never touch the network. The frontend has 12 unit tests for its pure data
-  shaping (`src/lib/chartData.ts`, CSV export).
+  mocked transport, so tests never touch the network. The frontend has 24 unit tests for its pure data
+  shaping (`src/lib/chartData.ts`, `src/lib/dashboard.ts`, CSV export).
 - **Independent verification.** A separate pandas recomputation reproduces `/api/accuracy` exactly: the
   latest run before D-1 09:20, hourly mean actuals, n = 744.
 - **Lint and format.** Backend: ruff (pycodestyle, pyflakes, isort, bugbear, pyupgrade, simplify, ruff
