@@ -28,7 +28,9 @@ export function useApiResource<T>(key: string, load: (signal: AbortSignal) => Pr
   useEffect(() => {
     const controller = new AbortController();
     load(controller.signal).then(
-      (data) => setSettled({ key: requestKey, data }),
+      (data) => {
+        if (!controller.signal.aborted) setSettled({ key: requestKey, data });
+      },
       (err: unknown) => {
         if (controller.signal.aborted) return;
         const error = err instanceof Error ? err : new Error(String(err));
