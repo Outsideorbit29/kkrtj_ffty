@@ -68,10 +68,12 @@ the decision table it is built on. The headline values are pinned in the backend
 
 | View | For | Content |
 |---|---|---|
+| **Overview** (default) | Everyone, at a glance | Six KPI cards with sparklines (MAE, bias, bias-corrected MAE, band coverage, skill vs persistence, energy shortfall), forecast vs actual, a day x hour error heatmap, a model leaderboard (P50, forecast, persistence, same hour D-2), daily error and cumulative forecast vs actual energy. |
 | **Day-ahead decision** | The buyer on decision day D-1 | Which run was the latest at the cutoff and how old it was. Tiles: expected wind energy (P50), the published forecast, extra cover for a low-wind case (P10), forecast low / peak hour, and as a backtest the actual energy and the hours that fell inside the band. Hourly chart of P50, the P10-P90 band, the published forecast and the actual outturn. A chart of how every run covering the day moved, with runs published after the decision drawn dashed. Hourly table with CSV export. |
 | **Forecast accuracy** | The desk lead / risk | For any delivery-date range: MAE, RMSE, bias, P90 absolute error, nMAE, skill vs both baselines, bias-corrected (P50) MAE and P10-P90 band coverage. A "Why the forecast runs high" callout. Charts of forecast vs actual, MAE and bias by lead time over all runs, bias by forecast level, daily error, the error distribution and MAE by hour of day, each with a data table. |
+| **Data explorer** | Analysts | Every delivery hour in a sortable, paginated table, filtered by direction, error size, day and hour, with live MAE/bias for the selection and CSV export of the filtered rows. |
 
-The gate-closure **cutoff** selector in the header applies to both views (presets 09:20, 11:00 and 15:30, or
+The gate-closure **cutoff** selector in the header applies to every view (presets 09:20, 11:00 and 15:30, or
 any `HH:MM`). View, cutoff and dates are kept in the URL, for example `?decision=2026-01-14&cutoff=09:20` or
 `?view=accuracy&from=2026-01-02&to=2026-02-01`, so any view can be bookmarked or shared.
 
@@ -190,13 +192,13 @@ To serve the production build from the backend without Docker, run `npm run buil
 
 ```bash
 cd backend
-python -m pytest -q                 # 86 tests, a few seconds, against the committed snapshot (no network)
+python -m pytest -q                 # 88 tests, a few seconds, against the committed snapshot (no network)
 python -m ruff check . && python -m ruff format --check .
 
 cd ../frontend
 npm run lint                        # ESLint (typescript-eslint, react-hooks)
 npm run build                       # tsc -b type-check + production build
-npm test                            # 12 node:test unit tests for chart/KPI data shaping and CSV
+npm test                            # 24 node:test unit tests for chart/KPI data shaping and CSV
 ```
 
 With the app running, the headline numbers can be checked directly:
@@ -262,7 +264,7 @@ widths) are constants in `backend/app/config.py`, not env vars, because changing
 ├── heroku.yml                    Heroku container-stack manifest (uses the Dockerfile)
 ├── vercel.json                   Vercel config: build frontend/dist, Python function for /api/*, SPA rewrite
 ├── api/index.py                  Vercel function entry point: imports the FastAPI app from backend/
-├── requirements.txt              Vercel's Python dependencies (just `-r backend/requirements.txt`)
+├── requirements.txt              Vercel's Python dependencies (same pins as backend/requirements.txt, checked by a test)
 ├── .github/workflows/ci.yml      CI: backend lint/format/tests, frontend lint/build, Docker build + smoke test
 ├── .gitignore, .dockerignore, .vercelignore, .gitattributes
 ├── docs/
@@ -297,7 +299,7 @@ widths) are constants in `backend/app/config.py`, not env vars, because changing
 │   │       └── params.py         strict date/cutoff parsing (400 on bad input)
 │   ├── data/snapshot/            committed Elexon extract: actuals.csv.gz, forecasts.csv.gz, manifest.json
 │   ├── scripts/fetch_data.py     refreshes the snapshot from Elexon
-│   └── tests/                    pytest suite (86 tests)
+│   └── tests/                    pytest suite (88 tests)
 │       ├── conftest.py           shared fixtures: snapshot dataset, TestClient without static files
 │       ├── test_timeutil.py      decision instants and delivery hours incl. DST days
 │       ├── test_actuals.py       hourly aggregation
@@ -308,7 +310,8 @@ widths) are constants in `backend/app/config.py`, not env vars, because changing
 │       ├── test_data.py          snapshot round-trip and integrity
 │       ├── test_elexon.py        client against a mocked HTTP transport
 │       ├── test_spa.py           SPA fallback, cache headers, path-traversal probes
-│       └── test_api.py           endpoint contract, pinned headline numbers, 400/404 cases
+│       ├── test_api.py           endpoint contract, pinned headline numbers, 400/404 cases
+│       └── test_vercel.py        root requirements.txt matches backend pins
 └── frontend/                     React 18, TypeScript, Vite, Recharts
     ├── README.md                 frontend notes: views, scripts, layout, colour conventions
     ├── package.json              scripts: dev, build, lint, test, typecheck
@@ -333,7 +336,7 @@ widths) are constants in `backend/app/config.py`, not env vars, because changing
 
 ## Development practices
 
-- **Tests that pin the analysis.** The 86 backend tests cover each analysis rule in isolation, including the
+- **Tests that pin the analysis.** The 88 backend tests cover each analysis rule in isolation, including the
   strict "before decision" boundary, the band's no-look-ahead mask, DST days and late runs. Contract tests
   run every endpoint against the real snapshot and pin the headline numbers (MAE 2038.9, bias 1747.9, skill
   50.4 / 53.0, P50 MAE 1445.8, band coverage 85.2 / 10.6 / 4.2). The Elexon client is tested against a
